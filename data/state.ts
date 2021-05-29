@@ -1,22 +1,23 @@
 import { makeVar } from '@apollo/client';
 
-export const dialogue = makeVar('');
-export const focus = makeVar('');
-export const location = makeVar('test');
+export const dialogueId = makeVar('');
+export const focusId = makeVar('');
+export const locationId = makeVar('test');
 export const topics = makeVar<Array<string>>([]);
 export const items = makeVar<Array<string>>([]);
+export const time = makeVar(12);
 
 export function setFocus(newFocus: string):void {
-  focus(newFocus);
+  focusId(newFocus);
 }
 
 export function setDialogue(newDialogue: string):void {
-  dialogue(newDialogue);
+  dialogueId(newDialogue);
 }
 
 export function unfocus():void {
-  dialogue('');
-  focus('');
+  dialogueId('');
+  focusId('');
 }
 
 export function addTopic(topicId:string):void {
@@ -27,4 +28,8 @@ export function addTopic(topicId:string):void {
 
 export function addItem(itemId:string):void {
   items([...items(), itemId]);
+}
+
+export function setTime(newTime:number):void {
+  time(newTime);
 }

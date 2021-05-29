@@ -1,10 +1,11 @@
+import { FC } from 'react';
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { ApolloProvider } from '@apollo/client/react';
 import { ApolloClient, InMemoryCache } from '@apollo/client';
 import {
-  dialogue, focus, location, topics, items,
+  dialogueId, focusId, locationId, topics, items, time,
 } from '../data/state';
 
 const client = new ApolloClient({
@@ -13,19 +14,19 @@ const client = new ApolloClient({
     typePolicies: {
       Query: {
         fields: {
-          dialogue: {
+          dialogueId: {
             read() {
-              return dialogue();
+              return dialogueId();
             },
           },
-          focus: {
+          focusId: {
             read() {
-              return focus();
+              return focusId();
             },
           },
-          location: {
+          locationId: {
             read() {
-              return location();
+              return locationId();
             },
           },
           topics: {
@@ -38,18 +39,21 @@ const client = new ApolloClient({
               return items();
             },
           },
+          time: {
+            read() {
+              return time();
+            },
+          },
         },
       },
     },
   }),
 });
 
-function MyApp({ Component, pageProps }: AppProps) {
-  return (
-    <ApolloProvider client={client}>
-      {/* eslint-disable-next-line react/jsx-props-no-spreading */}
-      <Component {...pageProps} />
-    </ApolloProvider>
-  );
-}
-export default MyApp;
+const App: FC<AppProps> = ({ Component, pageProps }) => (
+  <ApolloProvider client={client}>
+    {/* eslint-disable-next-line react/jsx-props-no-spreading */}
+    <Component {...pageProps} />
+  </ApolloProvider>
+);
+export default App;

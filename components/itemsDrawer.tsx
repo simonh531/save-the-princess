@@ -12,7 +12,7 @@ const Drawer = styled.div<{ offside: boolean, visible: number }>`
   grid-area: items;
   display: flex;
   flex-direction: column;
-  border-radius: 4px 0 4px 4px;
+  border-radius: 0 4px 4px 4px;
   padding: 10px 30px;
   pointer-events: auto;
   background-color: white;

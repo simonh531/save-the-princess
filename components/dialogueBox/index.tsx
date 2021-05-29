@@ -1,4 +1,6 @@
-import { FC, useState, useEffect } from 'react';
+import {
+  FC, useState, useEffect, MutableRefObject,
+} from 'react';
 import styled from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { BoxStyleList, Dialogue } from '../../utils/interfaces';
@@ -71,19 +73,20 @@ interface Props {
   dialogue: Dialogue
   theme: string
   advance: () => void
+  isTalking: boolean
   // eslint-disable-next-line no-unused-vars
   setIsTalking: (a: boolean) => void
-  endDialogue: boolean
+  endDialogue: MutableRefObject<boolean>,
 }
 const DialogueBox: FC<Props> = ({
-  dialogue, theme, advance, setIsTalking, endDialogue,
+  dialogue, theme, advance, isTalking, setIsTalking, endDialogue,
 }) => {
   const [text, setText] = useState(setEmptyDialogue(dialogue.text, theme));
 
   useEffect(() => {
     let newText = setEmptyDialogue(dialogue.text, theme);
-    let id:number;
     let start: number;
+    let id: number;
     let index = 0;
     let prevTime = -1;
     function animate(timestamp: number) {
@@ -113,22 +116,20 @@ const DialogueBox: FC<Props> = ({
           prevTime += 1;
         }
       }
-      if (dialogue.text.charAt(index)) {
+      if (dialogue.text.charAt(index) && !endDialogue.current) {
         id = requestAnimationFrame(animate);
       } else {
+        setText(dialogue.text);
         setIsTalking(false);
+        // eslint-disable-next-line no-param-reassign
+        endDialogue.current = false;
       }
     }
 
-    if (endDialogue) {
-      setText(dialogue.text);
-      setIsTalking(false);
-      return () => cancelAnimationFrame(id);
-    }
     setText(newText);
 
     if (isSpeech(theme)) {
-      if (dialogue.text && isSpeech(theme)) {
+      if (dialogue.text) {
         setIsTalking(true);
         id = requestAnimationFrame(animate);
       }
@@ -165,7 +166,7 @@ const DialogueBox: FC<Props> = ({
 
   return (
     <Box visible={dialogue.text} extra={boxStyles[theme]}>
-      <TextBox>
+      <TextBox onClick={isTalking ? advance : () => { /* do nothing */ }}>
         <ReactMarkdown components={components} disallowedElements={disallowed}>
           {text}
         </ReactMarkdown>

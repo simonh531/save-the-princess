@@ -1,10 +1,11 @@
-import { focus, setDialogue } from '../data/state';
+import { focusId, setDialogue } from '../data/state';
 
 export default {
-  file: '/assets/test/testprincess.png',
-  height: 0.7,
+  file: '/assets/testprincess/testprincess.png',
+  geometry: '/assets/testprincess/testprincess.svg',
+  height: 1.7,
   activate: ():void => {
-    switch (focus()) {
+    switch (focusId()) {
       case 'princess1':
         setDialogue('testprincess/tutorial0');
         break;

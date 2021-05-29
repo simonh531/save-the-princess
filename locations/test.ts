@@ -1,12 +1,15 @@
-// import { makeCharacterDialogueAction } from '../data/state';
+import { Location } from '../utils/interfaces';
 
-export default {
+const test:Location = {
   background: '/assets/test/testfield.jpg',
   wallPlan: '/assets/test/testwallplan.png',
   floorPlan: '/assets/test/testfloorplan.png',
   ceilingPlan: '/assets/test/testceilingplan.png',
   walls: {
-    255: '/assets/test/testwall.png',
+    255: {
+      url: '/assets/test/testwall.png',
+      geometry: '/assets/test/testwall.svg',
+    },
   },
   floor: {
     ffffff: {
@@ -41,3 +44,5 @@ export default {
     },
   },
 };
+
+export default test;

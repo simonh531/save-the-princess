@@ -13,30 +13,40 @@ import {
   Euler,
   Camera,
   Vector3,
+  DirectionalLight,
+  HemisphereLight,
+  AmbientLight,
+  CanvasTexture,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
 
-import { setFocus, setDialogue, unfocus } from '../../data/state';
-import { useWindowSize, useMousePosition } from '../../utils/hooks';
-import { ActivateList, Dialogue, WorldObjects } from '../../utils/interfaces';
 import {
-  loadCeiling, loadFloor, loadWalls, loadEntities,
+  setFocus, setDialogue, unfocus,
+} from '../../data/state';
+import { useWindowSize, useMousePosition } from '../../utils/hooks';
+import {
+  ActivateList, Dialogue, WorldObjects, Location, LookupArrayList,
+} from '../../utils/interfaces';
+import {
+  loadWalls, loadEntities, loadAmbientLights, loadPlane,
 } from '../../utils/loaders';
-import locations from '../../locations';
+import colorLookup, { makeLookupArray } from '../../utils/colorLookup';
+import Locations from '../../locations';
+import Dialogues from '../../dialogue';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
 import TopicsDrawer from '../../components/topicsDrawer';
 import ItemsDrawer from '../../components/itemsDrawer';
-import dialogueList from '../../dialogue';
 
 const GAME_STATE = gql`
   query GetGameState {
-    dialogue,
-    focus,
-    location,
+    dialogueId,
+    focusId,
+    locationId,
     topics,
     items,
+    time,
   }
 `;
 
@@ -47,106 +57,281 @@ const GameArea = styled.main`
 `;
 
 const defaultAction = () => () => { /* do nothing */ };
-const defaultDialogue = {
+const defaultDialogue:Dialogue = {
   text: '',
 };
+const defaultLocation:Location = {
+  background: '',
+  walls: {},
+  wallPlan: '',
+  floor: {},
+  floorPlan: '',
+  ceiling: {},
+  ceilingPlan: '',
+  entities: {},
+};
+
+// units are meters let's say
+const depth = 0.1;
+const cubeUnit = 3;
 
 const Game: FC = () => {
   const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
-  const [currentDialogue, setCurrentDialogue] = useState<Dialogue>(defaultDialogue);
-  const [dialogueTheme, setDialogueTheme] = useState<string>('');
   const [useTopic, setUseTopic] = useState<() => void>(defaultAction);
   const [useItem, setUseItem] = useState<() => void>(defaultAction);
   const [isTalking, setIsTalking] = useState(false);
-  const [endDialogue, setEndDialogue] = useState(false);
+  const endDialogue = useRef(false);
 
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
+
+  if (loading || !data) {
+    return null;
+  }
+
+  let location:Location = defaultLocation;
+  let dialogue:Dialogue = defaultDialogue;
+  let dialogueThemeId = '';
   const {
-    location, focus, dialogue, topics, items,
+    dialogueId, focusId, locationId, time, topics, items,
   } = data;
 
+  if (locationId && Locations[locationId]) {
+    location = Locations[locationId];
+  }
+  if (dialogueId) {
+    const keys = dialogueId.split('/');
+    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
+      dialogue = Dialogues[keys[0]][keys[1]];
+      [dialogueThemeId] = keys;
+    } else {
+      dialogueThemeId = '';
+    }
+  }
+  // initializable -- no need to update
   const scene = useRef(new Scene());
   const cameraPosition = useRef(new Vector3());
   const camera = useRef(new PerspectiveCamera());
   const dummyCamera = useRef(new Camera());
-  const worldObjects = useRef<WorldObjects>({});
   const entities = useRef<WorldObjects>({});
   const clickables = useRef<WorldObjects>({});
   const activates = useRef<ActivateList>({});
-  const renderer = useRef<WebGLRenderer|null>(null);
+  const ambientLight = useRef(new AmbientLight(0xffffff, 0));
+  const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
+  const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
+  const locationCenter = useRef(new Vector3(0, 0, 0));
+  const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
+  const animationFrameId = useRef(0);
 
-  const target = useRef<HTMLDivElement|null>(null);
+  // need to update
+  const [renderer, setRenderer] = useState<WebGLRenderer>();
+  const [backgroundCanvas, setBackgroundCanvas] = useState<HTMLCanvasElement>();
+  const [canvasTexture, setCanvasTexture] = useState<CanvasTexture>();
+  const [lookupArrays, setLookupArrays] = useState<LookupArrayList>({});
+
+  const target = useRef<HTMLDivElement | null>(null);
 
   const { width, height } = useWindowSize();
   const { mouseX, mouseY } = useMousePosition();
 
-  // initialization
+  // write lookup table
   useEffect(() => {
-    renderer.current = new WebGLRenderer();
+    async function makeLookupArrays() {
+      setLookupArrays({
+        nightFromDay: await makeLookupArray('/assets/nightfromday.CUBE'),
+      });
+    }
+    makeLookupArrays();
   }, []);
 
-  // load data
+  // initialization
   useEffect(() => {
-    if (loading === false && data && locations[location]) {
-      const currentLocation = locations[location];
+    if (!renderer) {
+      const newRenderer = new WebGLRenderer();
+      newRenderer.shadowMap.enabled = true;
+      if (target.current) {
+        target.current.replaceChild(newRenderer.domElement, target.current.childNodes[0]);
+      }
+      setRenderer(newRenderer);
+    }
+    directionalLight.current.castShadow = true;
+    directionalLight.current.shadow.mapSize.height = 1024;
+    directionalLight.current.shadow.mapSize.width = 1024;
+
+    if (!backgroundCanvas) {
+      const canvas = document.createElement('canvas');
+      setBackgroundCanvas(canvas);
+      setCanvasTexture(new CanvasTexture(canvas));
+    }
+
+    scene.current.add(directionalLight.current);
+    scene.current.background = backgroundRenderTarget.current.texture;
+  }, []);
+
+  useEffect(() => {
+    if (locationId) {
       const loader = new TextureLoader();
-      const texture = loader.load(
-        currentLocation.background,
-        () => {
-          const rt = new WebGLCubeRenderTarget(texture.image.height);
-          if (renderer.current instanceof WebGLRenderer) {
-            rt.fromEquirectangularTexture(renderer.current, texture);
-          }
-          scene.current.background = rt.texture;
-        },
-      );
+      const { walls, wallPlan } = location;
       loadWalls(
-        loader, scene.current, worldObjects.current,
-        currentLocation.walls, currentLocation.wallPlan, cameraPosition.current, camera.current,
+        loader, scene.current,
+        walls, wallPlan,
+        cameraPosition.current, camera.current, directionalLight.current,
+        locationCenter.current,
       );
-      loadFloor(
-        loader, scene.current, worldObjects.current,
-        currentLocation.floor, currentLocation.floorPlan,
+    }
+    // todo make dispose
+  }, [locationId]);
+
+  // floor
+  useEffect(() => {
+    if (locationId) {
+      const loader = new TextureLoader();
+      const { floor, floorPlan } = location;
+      loadPlane(
+        loader, scene.current,
+        floor, floorPlan,
+        -depth / 2, cubeUnit, new Euler(-Math.PI / 2, 0, 0),
+        false, true,
       );
-      loadCeiling(
-        loader, scene.current, worldObjects.current,
-        currentLocation.ceiling, currentLocation.ceilingPlan,
+    }
+    // todo make dispose
+  }, [locationId]);
+
+  // ceiling
+  useEffect(() => {
+    if (locationId) {
+      const loader = new TextureLoader();
+      const { ceiling, ceilingPlan } = location;
+      loadPlane(
+        loader, scene.current,
+        ceiling, ceilingPlan,
+        cubeUnit + depth / 2, cubeUnit, new Euler(Math.PI / 2, 0, 0),
+        true, false,
       );
+    }
+    // todo make dispose
+  }, [locationId]);
+
+  useEffect(() => {
+    if (locationId) {
+      const loader = new TextureLoader();
       loadEntities(
         loader, scene.current,
         entities.current, clickables.current, activates.current,
-        currentLocation.entities,
+        location.entities,
       );
-      if (target.current && renderer.current) {
-        target.current.replaceChild(renderer.current.domElement, target.current.childNodes[0]);
+    }
+    // todo make dispose
+  }, [locationId]);
+
+  useEffect(() => {
+    if (locationId) {
+      const { floor, ceiling, background } = location;
+      loadAmbientLights(
+        scene.current, floor, ceiling,
+        background,
+        ambientLight.current, hemisphereLight.current,
+      );
+    }
+  }, [locationId]);
+
+  // handle time lighting
+  useEffect(() => {
+    const dayTime = time % 24;
+    const lightStrengthFraction = dayTime / 24;
+    const lightStrength = 0.12 + 0.48 * Math.sin(lightStrengthFraction * Math.PI);
+    const origin = directionalLight.current.target.position.clone();
+    if (dayTime >= 6 && dayTime <= 18) { // sun time
+      directionalLight.current.intensity = lightStrength;
+      const fraction = (dayTime - 6) / 12;
+      origin.add(new Vector3(
+        Math.cos(fraction * Math.PI) * 10,
+        Math.sin(fraction * Math.PI) * 10,
+        0,
+      ));
+      directionalLight.current.position.copy(origin);
+    } else { // moon time
+      directionalLight.current.intensity = 0.05; // moon always gets the same amount of sun
+      const fraction = ((dayTime + 6) % 12) / 12;
+      origin.add(new Vector3(
+        Math.cos(fraction * Math.PI) * 10,
+        Math.sin(fraction * Math.PI) * 10,
+        0,
+      ));
+      directionalLight.current.position.copy(origin);
+    }
+    hemisphereLight.current.intensity = lightStrength * 0.9;
+    ambientLight.current.intensity = lightStrength * 0.8;
+  }, [time]);
+  useEffect(() => {
+    // I tried to memoize this with async but memo runs on
+    // the server and new Image() doesn't work on the server
+    function shadeBackground(strength: number, shading: number) {
+      const image = new Image();
+      image.src = location.background;
+      if (location.background && backgroundCanvas) {
+        const ctx = backgroundCanvas.getContext('2d');
+        image.addEventListener('load', () => {
+          if (backgroundCanvas && ctx && canvasTexture && renderer) {
+            backgroundCanvas.width = image.width;
+            backgroundCanvas.height = image.height;
+            ctx.drawImage(image, 0, 0);
+            const imageData = ctx.getImageData(0, 0, image.width, image.height);
+            const newImageData = new ImageData(
+              colorLookup(lookupArrays.nightFromDay, imageData.data, strength),
+              imageData.width,
+            );
+            ctx.putImageData(newImageData, 0, 0);
+            if (shading) {
+              ctx.globalCompositeOperation = 'darken';
+              ctx.globalAlpha = shading;
+              const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
+              gradient.addColorStop(0, 'black');
+              gradient.addColorStop(0.5, 'black');
+              gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
+              ctx.fillStyle = gradient;
+              ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            }
+            canvasTexture.needsUpdate = true;
+
+            backgroundRenderTarget.current.setSize(image.height, image.height);
+            backgroundRenderTarget.current.fromEquirectangularTexture(
+              renderer, canvasTexture,
+            );
+          }
+        });
       }
     }
-  }, [loading]);
+    const dayTime = time % 24;
+    if (dayTime >= 6 && dayTime <= 18) { // sun time
+      const fraction = (dayTime - 6) / 12;
+      const strength = (1 - Math.sin(fraction * Math.PI));
+      shadeBackground(strength, 0);
+    } else { // moon time
+      const fraction = ((dayTime + 6) % 12) / 12;
+      const strength = Math.sin(fraction * Math.PI) * 0.925;
+      shadeBackground(1, strength);
+    }
+  }, [time, location.background, Object.keys(lookupArrays).length]);
 
   // handle dialogue box
   useEffect(() => {
-    const keys = dialogue.split('/');
-    if (dialogueList[keys[0]] && dialogueList[keys[0]][keys[1]]) {
-      const newDialogue = dialogueList[keys[0]][keys[1]];
-      setCurrentDialogue(newDialogue);
-      setDialogueTheme(keys[0]);
-      if (newDialogue.effect) {
-        newDialogue.effect();
+    if (dialogueId && dialogue) {
+      if (dialogue.effect) {
+        dialogue.effect();
       }
     } else {
-      setCurrentDialogue(defaultDialogue);
       setAdvanceAction(defaultAction);
-      setDialogueTheme('');
     }
-  }, [dialogue]);
+  }, [dialogueId]);
   useEffect(() => {
-    if (currentDialogue.text) {
+    if (dialogueId && dialogue) {
       if (isTalking) {
-        setAdvanceAction(() => () => setEndDialogue(true));
-      } else if (typeof currentDialogue.next === 'string') {
-        if (currentDialogue.next === '') {
+        setAdvanceAction(() => () => {
+          endDialogue.current = true;
+        });
+      } else if (typeof dialogue.next === 'string') {
+        if (dialogue.next === '') {
           setAdvanceAction(() => () => {
-            setEndDialogue(false);
             if (height && width && mouseX && mouseY) {
               dummyCamera.current.setRotationFromEuler(new Euler(
                 -Math.PI * (mouseY / height - 0.5) * 0.05,
@@ -157,32 +342,31 @@ const Game: FC = () => {
             }
             unfocus();
           });
-        } else if (currentDialogue.next) {
+        } else {
           setAdvanceAction(() => () => {
-            setEndDialogue(false);
-            setDialogue(currentDialogue.next || '');
+            setDialogue(dialogue.next || '');
           });
         }
       }
       setUseTopic(() => (topicId:string) => {
-        if (currentDialogue.topic && currentDialogue.topic[topicId]) {
-          currentDialogue.topic[topicId]();
+        if (dialogue.topic && dialogue.topic[topicId]) {
+          dialogue.topic[topicId]();
         }
       });
       setUseItem(() => (itemId:string) => {
-        if (currentDialogue.item && currentDialogue.item[itemId]) {
-          currentDialogue.item[itemId]();
+        if (dialogue.item && dialogue.item[itemId]) {
+          dialogue.item[itemId]();
         }
       });
     }
-  }, [currentDialogue, isTalking]);
+  }, [dialogueId, isTalking]);
 
   // set canvas width and height
   useEffect(() => {
     camera.current.aspect = window.innerWidth / window.innerHeight;
     camera.current.updateProjectionMatrix();
-    if (renderer.current) {
-      renderer.current.setSize(window.innerWidth, window.innerHeight);
+    if (renderer) {
+      renderer.setSize(window.innerWidth, window.innerHeight);
     }
   }, [width, height]);
 
@@ -190,7 +374,7 @@ const Game: FC = () => {
   useEffect(() => {
     const raycaster = new Raycaster();
     if (height && width && mouseX && mouseY) {
-      if (!focus) {
+      if (!focusId) {
         dummyCamera.current.setRotationFromEuler(new Euler(
           -Math.PI * (mouseY / height - 0.5) * 0.05,
           -Math.PI * (mouseX / width - 0.5) * (height / width),
@@ -206,15 +390,15 @@ const Game: FC = () => {
         camera.current,
       );
       const intersects = raycaster.intersectObjects(Object.values(clickables.current));
-      if (renderer.current) {
+      if (renderer) {
         if (intersects.length) {
-          renderer.current.domElement.style.cursor = 'pointer';
+          renderer.domElement.style.cursor = 'pointer';
         } else {
-          renderer.current.domElement.style.cursor = 'default';
+          renderer.domElement.style.cursor = 'default';
         }
       }
     }
-  }, [width, height, mouseX, mouseY, focus]);
+  }, [width, height, mouseX, mouseY, focusId]);
 
   // mouse click event
   useEffect(() => {
@@ -230,7 +414,7 @@ const Game: FC = () => {
         );
         const intersects = raycaster.intersectObjects(Object.values(clickables.current));
         if (intersects.length) {
-          if (focus) {
+          if (focusId) {
             advanceAction();
           } else {
             setFocus(intersects[0].object.name);
@@ -239,15 +423,15 @@ const Game: FC = () => {
         }
       }
     }
-    if (renderer.current) {
-      renderer.current.domElement.addEventListener('click', click);
+    if (renderer) {
+      renderer.domElement.addEventListener('click', click);
     }
     return () => {
-      if (renderer.current) {
-        renderer.current.domElement.removeEventListener('click', click);
+      if (renderer) {
+        renderer.domElement.removeEventListener('click', click);
       }
     };
-  }, [width, height, focus, advanceAction]);
+  }, [width, height, focusId, advanceAction]);
 
   useEffect(() => {
     function handleKeydown(event:KeyboardEvent) {
@@ -272,24 +456,23 @@ const Game: FC = () => {
 
   // animation loop
   useEffect(() => {
-    let id:number;
     function animate() {
-      if (renderer.current) {
+      if (renderer) {
         Object.values(entities.current).forEach((entity) => {
           entity.lookAt(
             camera.current.position.x,
-            entity.position.y,
+            entity.position.y, // keep parallel with ground
             camera.current.position.z,
           );
         });
-        if (focus) {
-          const focusPosition = clickables.current[focus].position.clone();
-          focusPosition.add(new Vector3(0, 0.1, 0));
+        if (focusId) {
+          const focusPosition = clickables.current[focusId].position.clone();
+          focusPosition.add(new Vector3(0, 0.2, 0)); // focus on face
           dummyCamera.current.lookAt(focusPosition);
           // math
           const destination = cameraPosition.current.clone();
           destination.sub(focusPosition);
-          destination.normalize().multiplyScalar(0.6);
+          destination.normalize().multiplyScalar(2);
           destination.add(focusPosition);
           dummyCamera.current.position.copy(destination);
         } else {
@@ -297,34 +480,35 @@ const Game: FC = () => {
         }
         camera.current.quaternion.slerp(dummyCamera.current.quaternion, 0.05);
         camera.current.position.lerp(dummyCamera.current.position, 0.05);
-        renderer.current.render(scene.current, camera.current);
+        renderer.render(scene.current, camera.current);
       }
-      id = requestAnimationFrame(animate);
+      animationFrameId.current = requestAnimationFrame(animate);
     }
-    id = requestAnimationFrame(animate);
+    animationFrameId.current = requestAnimationFrame(animate);
 
-    return () => cancelAnimationFrame(id);
-  }, [height, width, focus]);
+    return () => cancelAnimationFrame(animationFrameId.current);
+  }, [height, width, focusId]);
 
   return (
     <GameArea ref={target}>
       <div />
       <GameGrid>
         <DialogueBox
-          dialogue={currentDialogue}
-          theme={dialogueTheme}
+          dialogue={dialogue}
+          theme={dialogueThemeId}
           advance={advanceAction}
+          isTalking={isTalking}
           setIsTalking={setIsTalking}
           endDialogue={endDialogue}
         />
         <TopicsDrawer
           topics={topics}
-          focus={focus}
+          focus={focusId}
           useTopic={useTopic}
         />
         <ItemsDrawer
           items={items}
-          focus={focus}
+          focus={focusId}
           useItem={useItem}
         />
       </GameGrid>

@@ -23,6 +23,7 @@ export interface WorldObjects {
 
 export interface Entity {
   file: string
+  geometry: string
   height: number
   activate: () => void
 }
@@ -42,15 +43,14 @@ export interface ActivateList {
   [key: string]: () => void
 }
 
-export interface wallList {
-  [key: number]: string
+export interface planeData {
+  url: string
+  geometry?: string
+  repeat?: number
 }
 
-export interface wallFloorList {
-  [key: string]: string|{
-    url: string
-    repeat?: number
-  }
+export interface planeList {
+  [key: string]: string | planeData
 }
 
 export interface Location {
@@ -58,9 +58,9 @@ export interface Location {
   wallPlan: string
   floorPlan: string
   ceilingPlan: string
-  walls: wallList
-  floor: wallFloorList
-  ceiling: wallFloorList
+  walls: planeList
+  floor: planeList
+  ceiling: planeList
   entities: EntityObjects
 }
 
@@ -111,4 +111,8 @@ export interface Item {
 
 export interface ItemList {
   [key: string]: Item
+}
+
+export interface LookupArrayList {
+  [key: string]: Array<Array<Array<Array<number>>>>
 }
