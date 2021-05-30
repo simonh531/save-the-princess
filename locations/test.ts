@@ -2,27 +2,37 @@ import { Location } from '../utils/interfaces';
 
 const test:Location = {
   background: '/assets/test/testfield.jpg',
-  wallPlan: '/assets/test/testwallplan.png',
-  floorPlan: '/assets/test/testfloorplan.png',
-  ceilingPlan: '/assets/test/testceilingplan.png',
+  groundLightTexture: '/assets/test/testground.jpg',
+  skyLightTexture: '/assets/test/testceiling.jpg',
   walls: {
-    255: {
-      url: '/assets/test/testwall.png',
-      geometry: '/assets/test/testwall.svg',
+    plan: '/assets/test/testwallplan.png',
+    tiles: {
+      255: {
+        url: '/assets/test/testwall.png',
+        geometry: '/assets/test/testwall.svg',
+      },
     },
   },
-  floor: {
-    ffffff: {
-      url: '/assets/test/testground.jpg',
-      repeat: 2,
+  horizontalPlanes: [
+    {
+      plan: '/assets/test/testfloorplan.png',
+      tiles: {
+        ffffff: {
+          url: '/assets/test/testground.jpg',
+          repeat: 2,
+        },
+      },
     },
-  },
-  ceiling: {
-    ffffff: {
-      url: '/assets/test/testceiling.jpg',
-      repeat: 3,
+    {
+      plan: '/assets/test/testceilingplan.png',
+      tiles: {
+        ffffff: {
+          url: '/assets/test/testceiling.jpg',
+          repeat: 3,
+        },
+      },
     },
-  },
+  ],
   entities: {
     princess: {
       entityId: 'testprincess',

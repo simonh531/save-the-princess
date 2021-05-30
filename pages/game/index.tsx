@@ -6,7 +6,6 @@ import {
   Scene,
   PerspectiveCamera,
   WebGLRenderer,
-  TextureLoader,
   WebGLCubeRenderTarget,
   Raycaster,
   Vector2,
@@ -17,18 +16,18 @@ import {
   HemisphereLight,
   AmbientLight,
   CanvasTexture,
+  Mesh,
+  Object3D,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
 
 import {
   setFocus, setDialogue, unfocus,
 } from '../../data/state';
-import { useWindowSize, useMousePosition } from '../../utils/hooks';
+import { useWindowSize, useMousePositionEffect } from '../../utils/hooks';
+import { Dialogue, Location } from '../../utils/interfaces';
 import {
-  ActivateList, Dialogue, WorldObjects, Location, LookupArrayList,
-} from '../../utils/interfaces';
-import {
-  loadWalls, loadEntities, loadAmbientLights, loadPlane,
+  loadLocation,
 } from '../../utils/loaders';
 import colorLookup, { makeLookupArray } from '../../utils/colorLookup';
 import Locations from '../../locations';
@@ -62,14 +61,26 @@ const defaultDialogue:Dialogue = {
 };
 const defaultLocation:Location = {
   background: '',
-  walls: {},
-  wallPlan: '',
-  floor: {},
-  floorPlan: '',
-  ceiling: {},
-  ceilingPlan: '',
-  entities: {},
+  groundLightTexture: '',
+  skyLightTexture: '',
+  walls: {
+    plan: '',
+    tiles: {},
+  },
+  horizontalPlanes: [],
 };
+
+function cleanup(mesh: Mesh) {
+  mesh.geometry.dispose();
+  if (Array.isArray(mesh.material)) {
+    mesh.material.forEach((material) => material.dispose());
+  } else {
+    mesh.material.dispose();
+  }
+  if (mesh.parent) {
+    mesh.parent.remove(mesh);
+  }
+}
 
 // units are meters let's say
 const depth = 0.1;
@@ -109,16 +120,17 @@ const Game: FC = () => {
   }
   // initializable -- no need to update
   const scene = useRef(new Scene());
-  const cameraPosition = useRef(new Vector3());
+  const cameraDefaultPosition = useRef(new Vector3());
   const camera = useRef(new PerspectiveCamera());
   const dummyCamera = useRef(new Camera());
-  const entities = useRef<WorldObjects>({});
-  const clickables = useRef<WorldObjects>({});
-  const activates = useRef<ActivateList>({});
+  const entities = useRef<Object3D[]>([]);
+  const clickables = useRef<Record<string, Object3D>>({});
+  const cleanupList = useRef<Mesh[]>([]);
+  // eslint-disable-next-line comma-spacing
+  const activates = useRef<Record<string,() => void>>({});
   const ambientLight = useRef(new AmbientLight(0xffffff, 0));
   const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
-  const locationCenter = useRef(new Vector3(0, 0, 0));
   const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
   const animationFrameId = useRef(0);
 
@@ -126,12 +138,11 @@ const Game: FC = () => {
   const [renderer, setRenderer] = useState<WebGLRenderer>();
   const [backgroundCanvas, setBackgroundCanvas] = useState<HTMLCanvasElement>();
   const [canvasTexture, setCanvasTexture] = useState<CanvasTexture>();
-  const [lookupArrays, setLookupArrays] = useState<LookupArrayList>({});
+  const [lookupArrays, setLookupArrays] = useState<Record<string, number[][][][]>>({});
 
   const target = useRef<HTMLDivElement | null>(null);
 
   const { width, height } = useWindowSize();
-  const { mouseX, mouseY } = useMousePosition();
 
   // write lookup table
   useEffect(() => {
@@ -145,6 +156,7 @@ const Game: FC = () => {
 
   // initialization
   useEffect(() => {
+    // console.log(scene.current.children);
     if (!renderer) {
       const newRenderer = new WebGLRenderer();
       newRenderer.shadowMap.enabled = true;
@@ -164,74 +176,40 @@ const Game: FC = () => {
     }
 
     scene.current.add(directionalLight.current);
+    scene.current.add(directionalLight.current.target);
     scene.current.background = backgroundRenderTarget.current.texture;
   }, []);
 
   useEffect(() => {
     if (locationId) {
-      const loader = new TextureLoader();
-      const { walls, wallPlan } = location;
-      loadWalls(
-        loader, scene.current,
-        walls, wallPlan,
-        cameraPosition.current, camera.current, directionalLight.current,
-        locationCenter.current,
+      loadLocation(
+        scene.current,
+        location,
+        cameraDefaultPosition.current,
+        camera.current,
+        directionalLight.current,
+        entities.current,
+        clickables.current,
+        activates.current,
+        cleanupList.current,
+        ambientLight.current,
+        hemisphereLight.current,
+        cubeUnit,
+        depth,
       );
     }
-    // todo make dispose
-  }, [locationId]);
 
-  // floor
-  useEffect(() => {
-    if (locationId) {
-      const loader = new TextureLoader();
-      const { floor, floorPlan } = location;
-      loadPlane(
-        loader, scene.current,
-        floor, floorPlan,
-        -depth / 2, cubeUnit, new Euler(-Math.PI / 2, 0, 0),
-        false, true,
-      );
-    }
-    // todo make dispose
-  }, [locationId]);
-
-  // ceiling
-  useEffect(() => {
-    if (locationId) {
-      const loader = new TextureLoader();
-      const { ceiling, ceilingPlan } = location;
-      loadPlane(
-        loader, scene.current,
-        ceiling, ceilingPlan,
-        cubeUnit + depth / 2, cubeUnit, new Euler(Math.PI / 2, 0, 0),
-        true, false,
-      );
-    }
-    // todo make dispose
-  }, [locationId]);
-
-  useEffect(() => {
-    if (locationId) {
-      const loader = new TextureLoader();
-      loadEntities(
-        loader, scene.current,
-        entities.current, clickables.current, activates.current,
-        location.entities,
-      );
-    }
-    // todo make dispose
-  }, [locationId]);
-
-  useEffect(() => {
-    if (locationId) {
-      const { floor, ceiling, background } = location;
-      loadAmbientLights(
-        scene.current, floor, ceiling,
-        background,
-        ambientLight.current, hemisphereLight.current,
-      );
-    }
+    return () => {
+      while (cleanupList.current.length) {
+        const next = cleanupList.current.shift();
+        if (next) {
+          cleanup(next);
+        }
+      }
+      entities.current = [];
+      clickables.current = {};
+      activates.current = {};
+    };
   }, [locationId]);
 
   // handle time lighting
@@ -315,7 +293,7 @@ const Game: FC = () => {
 
   // handle dialogue box
   useEffect(() => {
-    if (dialogueId && dialogue) {
+    if (dialogueId) {
       if (dialogue.effect) {
         dialogue.effect();
       }
@@ -323,7 +301,7 @@ const Game: FC = () => {
       setAdvanceAction(defaultAction);
     }
   }, [dialogueId]);
-  useEffect(() => {
+  useMousePositionEffect((mouseX, mouseY) => {
     if (dialogueId && dialogue) {
       if (isTalking) {
         setAdvanceAction(() => () => {
@@ -371,7 +349,7 @@ const Game: FC = () => {
   }, [width, height]);
 
   // mouse move event
-  useEffect(() => {
+  useMousePositionEffect((mouseX, mouseY) => {
     const raycaster = new Raycaster();
     if (height && width && mouseX && mouseY) {
       if (!focusId) {
@@ -398,7 +376,7 @@ const Game: FC = () => {
         }
       }
     }
-  }, [width, height, mouseX, mouseY, focusId]);
+  }, [width, height, focusId]);
 
   // mouse click event
   useEffect(() => {
@@ -458,7 +436,7 @@ const Game: FC = () => {
   useEffect(() => {
     function animate() {
       if (renderer) {
-        Object.values(entities.current).forEach((entity) => {
+        entities.current.forEach((entity) => {
           entity.lookAt(
             camera.current.position.x,
             entity.position.y, // keep parallel with ground
@@ -470,13 +448,14 @@ const Game: FC = () => {
           focusPosition.add(new Vector3(0, 0.2, 0)); // focus on face
           dummyCamera.current.lookAt(focusPosition);
           // math
-          const destination = cameraPosition.current.clone();
-          destination.sub(focusPosition);
-          destination.normalize().multiplyScalar(2);
-          destination.add(focusPosition);
+          const destination = cameraDefaultPosition.current.clone()
+            .sub(focusPosition)
+            .normalize()
+            .multiplyScalar(2)
+            .add(focusPosition);
           dummyCamera.current.position.copy(destination);
         } else {
-          dummyCamera.current.position.copy(cameraPosition.current);
+          dummyCamera.current.position.copy(cameraDefaultPosition.current);
         }
         camera.current.quaternion.slerp(dummyCamera.current.quaternion, 0.05);
         camera.current.position.lerp(dummyCamera.current.position, 0.05);

@@ -1,8 +1,3 @@
-import {
-  InstancedMesh,
-  Object3D,
-} from 'three';
-
 export interface WindowSize {
   width: number | undefined
   height: number | undefined
@@ -11,14 +6,6 @@ export interface WindowSize {
 export interface MousePosition {
   mouseX: number | undefined
   mouseY: number | undefined
-}
-
-export interface InstancedMeshTypes {
-  [key: string]: InstancedMesh
-}
-
-export interface WorldObjects {
-  [key: string]: Object3D
 }
 
 export interface Entity {
@@ -35,41 +22,24 @@ export interface LocationEntity {
   clickable: boolean
 }
 
-export interface EntityObjects {
-  [key: string]: LocationEntity
-}
-
-export interface ActivateList {
-  [key: string]: () => void
-}
-
-export interface planeData {
+export interface Tile {
   url: string
   geometry?: string
   repeat?: number
 }
 
-export interface planeList {
-  [key: string]: string | planeData
+export interface Plane {
+  plan: string
+  tiles: Record<string, Tile>
 }
 
 export interface Location {
   background: string
-  wallPlan: string
-  floorPlan: string
-  ceilingPlan: string
-  walls: planeList
-  floor: planeList
-  ceiling: planeList
-  entities: EntityObjects
-}
-
-export interface LocationList {
-  [key: string]: Location
-}
-
-export interface EntityList {
-  [key: string]: Entity
+  groundLightTexture: string,
+  skyLightTexture: string,
+  walls: Plane
+  horizontalPlanes: Plane[]
+  entities?: Record<string, LocationEntity>
 }
 
 export interface DialogueInteraction {
@@ -85,34 +55,10 @@ export interface Dialogue {
   item?: DialogueInteraction
 }
 
-export interface DialogueList {
-  [key: string]: Dialogue
-}
-
-export interface DialogueMasterList {
-  [key: string]: DialogueList
-}
-
-export interface BoxStyleList {
-  [key: string]: string
-}
-
 export interface Topic {
   name: string,
 }
 
-export interface TopicList {
-  [key: string]: Topic
-}
-
 export interface Item {
   name: string,
-}
-
-export interface ItemList {
-  [key: string]: Item
-}
-
-export interface LookupArrayList {
-  [key: string]: Array<Array<Array<Array<number>>>>
 }
