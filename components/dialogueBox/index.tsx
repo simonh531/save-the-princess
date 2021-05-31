@@ -3,7 +3,7 @@ import {
 } from 'react';
 import styled from 'styled-components';
 import ReactMarkdown from 'react-markdown';
-import { BoxStyleList, Dialogue } from '../../utils/interfaces';
+import { Dialogue } from '../../utils/interfaces';
 import * as styles from './styles';
 
 const Box = styled.div<{ visible: string, extra: string }>`
@@ -45,7 +45,7 @@ const ContinueBox = styled.div`
   }
 `;
 
-const boxStyles:BoxStyleList = styles;
+const boxStyles:Record<string, string> = styles;
 
 function isSpeech(theme: string) {
   if (theme === 'description' || theme === 'thought' || theme === 'location') {

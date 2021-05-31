@@ -1,9 +1,9 @@
 import * as testprincess from './testprincess';
 import * as topics from './topics';
 import * as items from './items';
-import { DialogueMasterList } from '../utils/interfaces';
+import { Dialogue } from '../utils/interfaces';
 
-const dialogueList:DialogueMasterList = {
+const dialogueList:Record<string, Record<string, Dialogue>> = {
   testprincess,
   topics,
   items,

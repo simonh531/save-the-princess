@@ -1,7 +1,7 @@
 import testprincess from './testprincess';
-import { EntityList } from '../utils/interfaces';
+import { Entity } from '../utils/interfaces';
 
-const entityList:EntityList = {
+const entityList:Record<string, Entity> = {
   testprincess,
 };
 

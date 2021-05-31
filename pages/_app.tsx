@@ -7,6 +7,7 @@ import { ApolloClient, InMemoryCache } from '@apollo/client';
 import {
   dialogueId, focusId, locationId, topics, items, time,
 } from '../data/state';
+import { checks } from '../data/checks';
 
 const client = new ApolloClient({
   uri: '/api/graphql',
@@ -42,6 +43,11 @@ const client = new ApolloClient({
           time: {
             read() {
               return time();
+            },
+          },
+          checks: {
+            read() {
+              return checks();
             },
           },
         },

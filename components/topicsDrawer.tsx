@@ -2,11 +2,11 @@ import { FC, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import ChatIcon from '@material-ui/icons/Chat';
 import { setDialogue } from '../data/state';
-import { Topic, TopicList } from '../utils/interfaces';
+import { Topic } from '../utils/interfaces';
 import NotificationDot from './notificationDot';
 import * as Topics from '../topics';
 
-const topicList:TopicList = Topics;
+const topicList:Record<string, Topic> = Topics;
 
 const Drawer = styled.div<{ offside: boolean, visible: number }>`
   grid-area: topics;

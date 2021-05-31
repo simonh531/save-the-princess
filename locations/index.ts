@@ -1,7 +1,7 @@
 import test from './test';
-import { LocationList } from '../utils/interfaces';
+import { Location } from '../utils/interfaces';
 
-const locationList:LocationList = {
+const locationList:Record<string, Location> = {
   test,
 };
 

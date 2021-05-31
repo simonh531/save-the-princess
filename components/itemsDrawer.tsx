@@ -2,11 +2,11 @@ import { FC, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import BusinessCenterIcon from '@material-ui/icons/BusinessCenter';
 import { setDialogue } from '../data/state';
-import { Item, ItemList } from '../utils/interfaces';
+import { Item } from '../utils/interfaces';
 import NotificationDot from './notificationDot';
 import * as Items from '../items';
 
-const itemList:ItemList = Items;
+const itemList:Record<string, Item> = Items;
 
 const Drawer = styled.div<{ offside: boolean, visible: number }>`
   grid-area: items;
