@@ -1,3 +1,5 @@
+import { LookupTable } from './interfaces';
+
 const getDecimal = (number: number) => {
   const split = `${number}`.split('.');
   if (split[1]) {
@@ -6,9 +8,25 @@ const getDecimal = (number: number) => {
   return 0;
 };
 
-const colorToNumberArray = (value: string) => {
+const getIndexFromIndices = (indices:number[], value:number): number => {
+  const scaledNumber = (value + 1) * 4 - 1; // 255 to 1023
+  const wholeIndex = indices.findIndex(
+    // is the last index and equal to 1023
+    (index, i) => (i === indices.length - 1 && scaledNumber === index)
+    || (scaledNumber >= index && scaledNumber < indices[i + 1]),
+  );
+  let decimal = 0;
+  if (wholeIndex !== indices.length - 1) {
+    decimal = (scaledNumber - indices[wholeIndex])
+    / (indices[wholeIndex + 1] - indices[wholeIndex]);
+  }
+
+  return wholeIndex + decimal;
+};
+
+const colorToNumberArray = (value: string, multiplier: number) => {
   const values = value.split(' ');
-  return values.map((valueString) => parseFloat(valueString) * 255);
+  return values.map((valueString) => parseFloat(valueString) * multiplier);
 };
 
 const colorsToDelta = (color1:number[], color2:number[], decimal: number) => [
@@ -91,68 +109,87 @@ const tetrahedralInterpolation = (
   );
 };
 
-export const makeLookupArray = async (url: string):Promise<number[][][][]> => {
+export const makeLookupTable = async (url: string):Promise<LookupTable> => {
+  const extension = url.split('.').pop() || 'error';
   const text = await (await (await fetch(url)).blob()).text();
   const textLines = text.split('\n');
-  const dimension = parseInt(
-    textLines[5].match(/\d+$/g)?.toString() || '0', 10,
-  );
-  const lookupArray = new Array(dimension);
+  let dimension = 17; // default
+  let padding = 0;
+  let multiplier = 1;
+  let indices;
+  if (extension === 'CUBE') {
+    dimension = parseInt(
+      textLines[5].match(/\d+$/g)?.toString() || '0', 10,
+    );
+    padding = 12;
+    multiplier = 255;
+  } else if (extension === '3DL') {
+    indices = textLines[2].split(' ').map((number) => parseInt(number, 10));
+    dimension = indices.length;
+    padding = 3;
+    multiplier = 1;
+  }
+  const lookupTable = new Array(dimension);
   // the reason I decide to parse it here is because parsing 17^3
   // times is better than parsing 4 * 1000 * 500 times for an image
   for (let i = 0; i < dimension; i += 1) {
     const newArray = new Array(dimension);
     newArray[0] = new Array(dimension);
-    newArray[0][0] = colorToNumberArray(textLines[i + 12]);
-    lookupArray[i] = newArray;
+    newArray[0][0] = colorToNumberArray(textLines[i + padding], multiplier);
+    lookupTable[i] = newArray;
   }
   for (let i = dimension; i < dimension * dimension; i += 1) {
     const newArray = new Array(dimension);
-    newArray[0] = colorToNumberArray(textLines[i + 12]);
-    lookupArray[i % dimension][Math.floor(i / dimension)] = newArray;
+    newArray[0] = colorToNumberArray(textLines[i + padding], multiplier);
+    lookupTable[i % dimension][Math.floor(i / dimension)] = newArray;
   }
-  for (let i = dimension * dimension; i + 12 < textLines.length; i += 1) {
-    lookupArray[
+  for (let i = dimension * dimension; i + padding < textLines.length; i += 1) {
+    lookupTable[
       i % dimension][
       Math.floor(i / dimension) % dimension][
-      Math.floor(i / dimension / dimension)] = colorToNumberArray(textLines[i + 12]);
+      Math.floor(i / dimension / dimension)] = colorToNumberArray(
+      textLines[i + padding], multiplier,
+    );
   }
-  return lookupArray;
+  return {
+    array: lookupTable,
+    type: extension,
+    indices,
+  };
 };
 
 export default function colorLookup(
-  lookupArray: number[][][][], data: Uint8ClampedArray, strength: number,
+  lookupTable: LookupTable, data: Uint8ClampedArray,
 ):Uint8ClampedArray {
-  let newData;
-  if (strength === 0) {
-    newData = data;
-  } else {
-    const dimension = lookupArray.length;
-    newData = new Uint8ClampedArray(data.length);
+  const dimension = lookupTable.array.length;
+  const newData = new Uint8ClampedArray(data.length);
+  if (lookupTable.type === 'CUBE') {
     for (let i = 0; i < data.length; i += 4) {
-      const r = data[i] / dimension;
-      const g = data[i + 1] / dimension;
-      const b = data[i + 2] / dimension;
+      const rIndex = data[i] / dimension;
+      const gIndex = data[i + 1] / dimension;
+      const bIndex = data[i + 2] / dimension;
 
-      const newColor = tetrahedralInterpolation(lookupArray, r, g, b);
+      const [newR, newG, newB] = tetrahedralInterpolation(
+        lookupTable.array, rIndex, gIndex, bIndex,
+      );
+      newData[i] = Math.round(newR);
+      newData[i + 1] = Math.round(newG);
+      newData[i + 2] = Math.round(newB);
+      newData[i + 3] = 255;
+    }
+  } else if (lookupTable.type === '3DL' && lookupTable.indices) {
+    for (let i = 0; i < data.length; i += 4) {
+      const rIndex = getIndexFromIndices(lookupTable.indices, data[i]);
+      const gIndex = getIndexFromIndices(lookupTable.indices, data[i + 1]);
+      const bIndex = getIndexFromIndices(lookupTable.indices, data[i + 2]);
 
-      if (strength === 1) {
-        const [newR, newG, newB] = newColor;
-        newData[i] = Math.round(newR);
-        newData[i + 1] = Math.round(newG);
-        newData[i + 2] = Math.round(newB);
-        newData[i + 3] = 255;
-      } else { // strength is a decimal
-        const origColor = [data[i], data[i + 1], data[i + 2]];
-        const [newR, newG, newB] = addColors(
-          origColor,
-          colorsToDelta(origColor, newColor, strength),
-        );
-        newData[i] = Math.round(newR);
-        newData[i + 1] = Math.round(newG);
-        newData[i + 2] = Math.round(newB);
-        newData[i + 3] = 255;
-      }
+      const [newR, newG, newB] = tetrahedralInterpolation(
+        lookupTable.array, rIndex, gIndex, bIndex,
+      ); // range 4095 to 255
+      newData[i] = Math.round((newR + 1) / 16 - 1);
+      newData[i + 1] = Math.round((newG + 1) / 16 - 1);
+      newData[i + 2] = Math.round((newB + 1) / 16 - 1);
+      newData[i + 3] = 255;
     }
   }
   return newData;

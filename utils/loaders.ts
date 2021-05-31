@@ -22,9 +22,11 @@ import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { PNG } from 'pngjs';
 import FastAverageColor from 'fast-average-color';
 
+import { Dispatch, SetStateAction } from 'react';
 import {
-  Location, Plane, Tile, LocationEntity,
+  Location, Plane, Tile, LocationEntity, BackgroundVersions, LookupTable,
 } from './interfaces';
+import colorLookup from './colorLookup';
 
 import Entities from '../entities';
 
@@ -79,12 +81,42 @@ export async function loadLocation(
   hemisphereLight: HemisphereLight,
   cubeUnit: number, // possibly moved to location file
   depth: number, // possibly moved to location file
+  lookupTables: Record<string, LookupTable>,
+  filteredBackgrounds: Record<string, BackgroundVersions>,
+  setFilteredBackgrounds: Dispatch<SetStateAction<Record<string, BackgroundVersions>>>,
 ): Promise<void> {
   const loader = new TextureLoader();
   const dummy = new Object3D();
   const {
     walls, horizontalPlanes, entities, background, groundLightTexture, skyLightTexture,
   } = location;
+
+  function filterBackground() {
+    const image = new Image();
+    image.src = background;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    image.addEventListener('load', () => {
+      canvas.width = image.width;
+      canvas.height = image.height;
+      if (ctx) {
+        ctx.drawImage(image, 0, 0);
+        const imageData = ctx.getImageData(0, 0, image.width, image.height);
+        setFilteredBackgrounds({
+          ...filteredBackgrounds,
+          [background]: {
+            default: new ImageData(imageData.data, imageData.width),
+            sunset: new ImageData(
+              colorLookup(lookupTables.LateSunset, imageData.data), imageData.width,
+            ),
+            night: new ImageData(
+              colorLookup(lookupTables.nightfromday, imageData.data), imageData.width,
+            ),
+          },
+        });
+      }
+    });
+  }
 
   async function createInstancedMeshes(
     id: string,
@@ -401,4 +433,5 @@ export async function loadLocation(
     loadEntities(entities);
   }
   loadAmbientLights();
+  filterBackground();
 }

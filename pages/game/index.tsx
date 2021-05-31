@@ -25,11 +25,11 @@ import {
   setFocus, setDialogue, unfocus,
 } from '../../data/state';
 import { useWindowSize, useMousePositionEffect } from '../../utils/hooks';
-import { Dialogue, Location } from '../../utils/interfaces';
 import {
-  loadLocation,
-} from '../../utils/loaders';
-import colorLookup, { makeLookupArray } from '../../utils/colorLookup';
+  BackgroundVersions, Dialogue, Location, LookupTable,
+} from '../../utils/interfaces';
+import { loadLocation } from '../../utils/loaders';
+import { makeLookupTable } from '../../utils/colorLookup';
 import Locations from '../../locations';
 import Dialogues from '../../dialogue';
 
@@ -136,9 +136,13 @@ const Game: FC = () => {
 
   // need to update
   const [renderer, setRenderer] = useState<WebGLRenderer>();
-  const [backgroundCanvas, setBackgroundCanvas] = useState<HTMLCanvasElement>();
+  const [canvasCtx, setCanvasCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [canvasTexture, setCanvasTexture] = useState<CanvasTexture>();
-  const [lookupArrays, setLookupArrays] = useState<Record<string, number[][][][]>>({});
+  const [lookupTables, setLookupTables] = useState<Record<string, LookupTable>>({});
+  const [
+    filteredBackgrounds,
+    setFilteredBackgrounds,
+  ] = useState<Record<string, BackgroundVersions>>({});
 
   const target = useRef<HTMLDivElement | null>(null);
 
@@ -146,12 +150,13 @@ const Game: FC = () => {
 
   // write lookup table
   useEffect(() => {
-    async function makeLookupArrays() {
-      setLookupArrays({
-        nightFromDay: await makeLookupArray('/assets/nightfromday.CUBE'),
+    async function makeLookupTables() {
+      setLookupTables({
+        nightfromday: await makeLookupTable('/assets/nightfromday.CUBE'),
+        LateSunset: await makeLookupTable('/assets/LateSunset.3DL'),
       });
     }
-    makeLookupArrays();
+    makeLookupTables();
   }, []);
 
   // initialization
@@ -169,9 +174,9 @@ const Game: FC = () => {
     directionalLight.current.shadow.mapSize.height = 1024;
     directionalLight.current.shadow.mapSize.width = 1024;
 
-    if (!backgroundCanvas) {
+    if (!canvasCtx) {
       const canvas = document.createElement('canvas');
-      setBackgroundCanvas(canvas);
+      setCanvasCtx(canvas.getContext('2d'));
       setCanvasTexture(new CanvasTexture(canvas));
     }
 
@@ -181,7 +186,7 @@ const Game: FC = () => {
   }, []);
 
   useEffect(() => {
-    if (locationId) {
+    if (locationId && Object.keys(lookupTables).length) {
       loadLocation(
         scene.current,
         location,
@@ -196,6 +201,9 @@ const Game: FC = () => {
         hemisphereLight.current,
         cubeUnit,
         depth,
+        lookupTables,
+        filteredBackgrounds,
+        setFilteredBackgrounds,
       );
     }
 
@@ -210,7 +218,7 @@ const Game: FC = () => {
       clickables.current = {};
       activates.current = {};
     };
-  }, [locationId]);
+  }, [locationId, Object.keys(lookupTables).length]);
 
   // handle time lighting
   useEffect(() => {
@@ -221,14 +229,20 @@ const Game: FC = () => {
     if (dayTime >= 6 && dayTime <= 18) { // sun time
       directionalLight.current.intensity = lightStrength;
       const fraction = (dayTime - 6) / 12;
+      const blueStrength = (Math.sin(fraction * Math.PI) * 1.2) - 1; // range 0.2 to -1
+      const r = Math.min(1 - blueStrength, 1);
+      const g = 1 - Math.abs(blueStrength) / 2;
+      const b = Math.min(1 + blueStrength, 1);
+      directionalLight.current.color.setRGB(r, g, b);
       origin.add(new Vector3(
         Math.cos(fraction * Math.PI) * 10,
-        Math.sin(fraction * Math.PI) * 10,
+        Math.sin(fraction * Math.PI) * 10 + 0.1, // 0.1 so you can still see at sunset
         0,
       ));
       directionalLight.current.position.copy(origin);
     } else { // moon time
       directionalLight.current.intensity = 0.05; // moon always gets the same amount of sun
+      directionalLight.current.color.setHex(0xffffff);
       const fraction = ((dayTime + 6) % 12) / 12;
       origin.add(new Vector3(
         Math.cos(fraction * Math.PI) * 10,
@@ -241,55 +255,60 @@ const Game: FC = () => {
     ambientLight.current.intensity = lightStrength * 0.8;
   }, [time]);
   useEffect(() => {
-    // I tried to memoize this with async but memo runs on
-    // the server and new Image() doesn't work on the server
-    function shadeBackground(strength: number, shading: number) {
-      const image = new Image();
-      image.src = location.background;
-      if (location.background && backgroundCanvas) {
-        const ctx = backgroundCanvas.getContext('2d');
-        image.addEventListener('load', () => {
-          if (backgroundCanvas && ctx && canvasTexture && renderer) {
-            backgroundCanvas.width = image.width;
-            backgroundCanvas.height = image.height;
-            ctx.drawImage(image, 0, 0);
-            const imageData = ctx.getImageData(0, 0, image.width, image.height);
-            const newImageData = new ImageData(
-              colorLookup(lookupArrays.nightFromDay, imageData.data, strength),
-              imageData.width,
-            );
-            ctx.putImageData(newImageData, 0, 0);
-            if (shading) {
-              ctx.globalCompositeOperation = 'darken';
-              ctx.globalAlpha = shading;
-              const gradient = ctx.createLinearGradient(0, 0, 0, ctx.canvas.height);
-              gradient.addColorStop(0, 'black');
-              gradient.addColorStop(0.5, 'black');
-              gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
-              ctx.fillStyle = gradient;
-              ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            }
-            canvasTexture.needsUpdate = true;
-
-            backgroundRenderTarget.current.setSize(image.height, image.height);
-            backgroundRenderTarget.current.fromEquirectangularTexture(
-              renderer, canvasTexture,
-            );
-          }
-        });
+    if (canvasCtx && canvasTexture && renderer) {
+      const dayTime = time % 24;
+      if (dayTime >= 6 && dayTime <= 18) { // sun time
+        const fraction = (dayTime - 6) / 12;
+        const strength = (1 - Math.sin(fraction * Math.PI));
+        canvasCtx.canvas.width = filteredBackgrounds[location.background].night.width;
+        canvasCtx.canvas.height = filteredBackgrounds[location.background].night.height;
+        canvasCtx.putImageData(
+          filteredBackgrounds[location.background].default,
+          0, 0,
+        );
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+          tempCanvas.width = canvasCtx.canvas.width;
+          tempCanvas.height = canvasCtx.canvas.height;
+          tempCtx.putImageData(
+            filteredBackgrounds[location.background].sunset,
+            0, 0,
+          );
+          canvasCtx.globalCompositeOperation = 'source-over';
+          canvasCtx.globalAlpha = strength;
+          canvasCtx.drawImage(tempCanvas, 0, 0);
+        }
+        canvasTexture.needsUpdate = true;
+        backgroundRenderTarget.current.setSize(canvasCtx.canvas.height, canvasCtx.canvas.height);
+        backgroundRenderTarget.current.fromEquirectangularTexture(
+          renderer, canvasTexture,
+        );
+      } else { // moon time
+        const fraction = ((dayTime + 6) % 12) / 12;
+        const strength = Math.sin(fraction * Math.PI) * 0.85;
+        canvasCtx.canvas.width = filteredBackgrounds[location.background].night.width;
+        canvasCtx.canvas.height = filteredBackgrounds[location.background].night.height;
+        canvasCtx.putImageData(
+          filteredBackgrounds[location.background].night,
+          0, 0,
+        );
+        canvasCtx.globalCompositeOperation = 'darken';
+        canvasCtx.globalAlpha = strength;
+        const gradient = canvasCtx.createLinearGradient(0, 0, 0, canvasCtx.canvas.height);
+        gradient.addColorStop(0, 'black');
+        gradient.addColorStop(0.5, 'black');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
+        canvasCtx.fillStyle = gradient;
+        canvasCtx.fillRect(0, 0, canvasCtx.canvas.width, canvasCtx.canvas.height);
+        canvasTexture.needsUpdate = true;
+        backgroundRenderTarget.current.setSize(canvasCtx.canvas.height, canvasCtx.canvas.height);
+        backgroundRenderTarget.current.fromEquirectangularTexture(
+          renderer, canvasTexture,
+        );
       }
     }
-    const dayTime = time % 24;
-    if (dayTime >= 6 && dayTime <= 18) { // sun time
-      const fraction = (dayTime - 6) / 12;
-      const strength = (1 - Math.sin(fraction * Math.PI));
-      shadeBackground(strength, 0);
-    } else { // moon time
-      const fraction = ((dayTime + 6) % 12) / 12;
-      const strength = Math.sin(fraction * Math.PI) * 0.925;
-      shadeBackground(1, strength);
-    }
-  }, [time, location.background, Object.keys(lookupArrays).length]);
+  }, [time, filteredBackgrounds[location.background]]);
 
   // handle dialogue box
   useEffect(() => {

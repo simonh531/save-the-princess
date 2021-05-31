@@ -62,3 +62,15 @@ export interface Topic {
 export interface Item {
   name: string,
 }
+
+export interface BackgroundVersions {
+  default: ImageData,
+  sunset: ImageData,
+  night: ImageData,
+}
+
+export interface LookupTable {
+  array: number[][][][],
+  type: string
+  indices?: number[],
+}
