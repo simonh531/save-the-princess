@@ -238,7 +238,12 @@ const DialogueBox: FC<Props> = ({
       const { children, href } = props;
       let action = () => { /* do nothing */ };
       if (dialogueId && dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
-        action = dialogue.actions[parseInt(href, 10)];
+        const temp = dialogue.actions[parseInt(href, 10)];
+        if (typeof temp === 'string') {
+          action = () => setDialogue(temp);
+        } else {
+          action = temp;
+        }
       }
       return (
         <ActionText onClick={action}>

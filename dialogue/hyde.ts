@@ -1,7 +1,5 @@
 import { Dialogue } from '../utils/interfaces';
-import {
-  setDialogue, addTopic, // addItem, setTime,
-} from '../data/state';
+import { addTopic } from '../data/state';
 
 export const intro:Dialogue[] = [
   {
@@ -12,29 +10,26 @@ export const intro:Dialogue[] = [
       },
     ],
     topic: {
-      kalvin: () => setDialogue('kalvin'),
+      kalvin: 'kalvin',
     },
   }, {
     text: "Are you excited? It's been quite a while since you last saw *Princess Annette*. Soon to be Queen Annette that is.",
     topic: {
-      kalvin: () => setDialogue('kalvin'),
+      kalvin: 'kalvin',
     },
   }, {
     text: 'I remember how smitten you were all those years ago. While you have the habit of running your mouth at even the slightest gust of air, she somehow managed to take your breath away.',
     topic: {
-      kalvin: () => setDialogue('kalvin'),
+      kalvin: 'kalvin',
     },
   }, {
     speaker: 'kalvin',
     text: '*I blushed in response. Normally I would have put up some excuse or protest, but Hyde knew me too well. Instead, I pouted and rolled my eyes.*',
-    topic: {
-      kalvin: () => setDialogue('kalvin'),
-    },
   }, {
     text: "Well, I guess it's not all good news. It's quite the tragedy that her mother, Queen Marianne had passed in such fashion. I can't begin to imagine what Fidelia is going through right now. But for them to hold the Coronation festival so promptly tells me that they have a strong heart to move on.",
     next: '',
     topic: {
-      kalvin: () => setDialogue('kalvin'),
+      kalvin: 'kalvin',
     },
   },
 ];

@@ -1,24 +1,20 @@
 import { Dialogue } from '../utils/interfaces';
-import {
-  setDialogue, addTopic, addItem, setTime,
-} from '../data/state';
+import { addTopic, addItem, setTime } from '../data/state';
 
 export const tutorial:Dialogue[] = [
   {
     text: "Hey y'all! It's center princess's [birthday](0)!",
     actions: [
-      ():void => {
-        setDialogue('testprincess/birthdayReproach');
-      },
+      'testprincess/birthdayReproach',
     ],
     item: {
-      fakeCake: () => setDialogue('testprincess/killMe'),
+      fakeCake: 'testprincess/killMe',
     },
   }, {
     text: "She's been kind of pouty recently...",
     next: '',
     item: {
-      fakeCake: () => setDialogue('testprincess/killMe'),
+      fakeCake: 'testprincess/killMe',
     },
   },
 ];
@@ -30,7 +26,7 @@ export const birthdayReproach:Dialogue = {
     addTopic('centerPrincessBirthday');
   },
   item: {
-    fakeCake: () => setDialogue('testprincess/killMe'),
+    fakeCake: 'testprincess/killMe',
   },
 };
 
@@ -43,9 +39,7 @@ export const birthdayPout:Dialogue = {
   text: '**:(**',
   next: '',
   topic: {
-    centerPrincessBirthday: () => {
-      setDialogue('testprincess/giveBirthdayCake');
-    },
+    centerPrincessBirthday: 'testprincess/giveBirthdayCake',
   },
 };
 

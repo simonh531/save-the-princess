@@ -42,18 +42,14 @@ export interface Location {
   entities?: Record<string, LocationEntity>
 }
 
-export interface DialogueInteraction {
-  [key: string]: () => void
-}
-
 export interface Dialogue {
   text: string
   speaker?: string,
   next?: string
   effect?: () => void
-  actions?: Array<() => void>
-  topic?: DialogueInteraction
-  item?: DialogueInteraction
+  actions?: Array<(() => void) | string>
+  topic?: Record<string, (() => void) | string>
+  item?: Record<string, (() => void) | string>
 }
 
 export interface Topic {

@@ -75,12 +75,19 @@ const makeUseTopic = (dialogueId: string, id: string) => {
           dialogue = temp;
         }
         if (dialogue.topic && dialogue.topic[id]) {
-          action = dialogue.topic[id];
+          const actionTemp = dialogue.topic[id];
+          if (typeof actionTemp === 'string') {
+            action = () => setDialogue(actionTemp);
+          } else {
+            action = actionTemp;
+          }
         } else {
           action = () => setDialogue(`topics/${id}`);
         }
       }
     }
+  } else {
+    action = () => setDialogue(`topics/${id}`);
   }
   return action;
 };

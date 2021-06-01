@@ -75,12 +75,19 @@ const makeUseItem = (dialogueId: string, id: string) => {
           dialogue = temp;
         }
         if (dialogue.item && dialogue.item[id]) {
-          action = dialogue.item[id];
+          const actionTemp = dialogue.item[id];
+          if (typeof actionTemp === 'string') {
+            action = () => setDialogue(actionTemp);
+          } else {
+            action = actionTemp;
+          }
         } else {
           action = () => setDialogue(`items/${id}`);
         }
       }
     }
+  } else {
+    action = () => setDialogue(`items/${id}`);
   }
   return action;
 };
