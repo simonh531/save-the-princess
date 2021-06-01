@@ -12,6 +12,9 @@ export const intro:Dialogue[] = [
     topic: {
       kalvin: 'kalvin',
     },
+    item: {
+      present: 'present',
+    },
   }, {
     text: "Are you excited? It's been quite a while since you last saw *Princess Annette*. Soon to be Queen Annette that is.",
     topic: {
@@ -36,5 +39,10 @@ export const intro:Dialogue[] = [
 
 export const kalvin:Dialogue = {
   text: "I've known you since you were but a little kid. Your father couldn't find you a tutor that could deal with your antics until I came along.",
-  next: 'return',
+  next: '',
+};
+
+export const present:Dialogue = {
+  text: 'Yeah this is a piece of garbage, Kalvin.',
+  next: '',
 };

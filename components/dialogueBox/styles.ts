@@ -9,11 +9,3 @@ export const hyde = `
 export const kalvin = `
   background-color: lightskyblue;
 `;
-
-export const topics = `
-  background-color: white;
-`;
-
-export const items = `
-  background-color: white;
-`;

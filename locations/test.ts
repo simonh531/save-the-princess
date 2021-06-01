@@ -58,6 +58,12 @@ const test:Location = {
       z: 3,
       clickable: true,
     },
+    present: {
+      entityId: 'present',
+      x: 1.5,
+      z: 3,
+      clickable: true,
+    },
   },
 };
 

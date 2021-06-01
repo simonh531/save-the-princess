@@ -377,7 +377,7 @@ export async function loadLocation(
         svgLoader.loadAsync(entityData.geometry),
         loader.loadAsync(entityData.file),
       ]);
-      const shape = data.paths[0].toShapes(false);
+      const shape = data.paths[0].toShapes(true);
       const geometry = new ExtrudeGeometry(shape, { depth, bevelEnabled: false });
       geometry.center();
       let scale = 0;

@@ -25,6 +25,7 @@ const Box = styled.div<{ visible: string, extra: string }>`
   padding-top: 0px;
   opacity: ${(props) => (props.visible ? '0.95' : '0')};
   pointer-events: auto;
+  background-color: white;
   ${(props) => props.extra}
 
   transition: 0.4s opacity;

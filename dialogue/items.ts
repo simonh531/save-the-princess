@@ -5,6 +5,7 @@ export const fakeCake:Dialogue = {
   next: '',
 };
 
-export const test:Dialogue = {
-  text: 'test',
+export const present:Dialogue = {
+  text: 'This looks like a really really good present.',
+  next: '',
 };
