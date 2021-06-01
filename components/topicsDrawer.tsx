@@ -1,12 +1,21 @@
 import { FC, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import ChatIcon from '@material-ui/icons/Chat';
-import { setDialogue } from '../data/state';
-import { Topic } from '../utils/interfaces';
+import { gql, useQuery } from '@apollo/client';
+import { Dialogue, Topic } from '../utils/interfaces';
 import NotificationDot from './notificationDot';
 import * as Topics from '../topics';
+import Dialogues from '../dialogue';
+import { setDialogue } from '../data/state';
 
 const topicList:Record<string, Topic> = Topics;
+
+const TOPICS = gql`
+  query GetTopics {
+    dialogueId
+    topics
+  }
+`;
 
 const Drawer = styled.div<{ offside: boolean, visible: number }>`
   grid-area: topics;
@@ -44,42 +53,54 @@ const Listing = styled.div`
   user-select: none;
 `;
 
-function TopicListing({
-  id, topic, focus, useTopic,
-}:{
-  // buggy
-  // eslint-disable-next-line no-unused-vars
-  id: string, topic: Topic, focus: string, useTopic: (topicId: string) => void
-}) {
-  const click = () => {
-    if (!focus) {
-      setDialogue(`topics/${id}`);
-    } else {
-      useTopic(id);
-    }
-  };
+function TopicListing({ name, useTopic }:{ name: string, useTopic: () => void }) {
   return (
-    <Listing onClick={click}>
-      {topic.name}
+    <Listing onClick={useTopic}>
+      {name}
     </Listing>
   );
 }
 
-interface Props {
-  topics: Array<string>
-  focus: string
-  useTopic: () => void
-}
-const TopicsDrawer: FC<Props> = ({ topics, focus, useTopic }) => {
+const makeUseTopic = (dialogueId: string, id: string) => {
+  let action = () => { /* do nothing */ };
+  if (dialogueId) {
+    const keys = dialogueId.split('/');
+    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
+      const temp = Dialogues[keys[0]][keys[1]];
+      let dialogue: Dialogue;
+      if (!Array.isArray(temp) || keys.length === 3) {
+        if (Array.isArray(temp)) {
+          dialogue = temp[parseInt(keys[2], 10)];
+        } else {
+          dialogue = temp;
+        }
+        if (dialogue.topic && dialogue.topic[id]) {
+          action = dialogue.topic[id];
+        } else {
+          action = () => setDialogue(`topics/${id}`);
+        }
+      }
+    }
+  }
+  return action;
+};
+
+const TopicsDrawer: FC = () => {
+  const { loading, /* error, */ data } = useQuery(TOPICS);
   const [offside, setOffside] = useState(true);
   const [notification, setNotification] = useState(false);
   const toggle = () => {
     setOffside(!offside);
     setNotification(false);
   };
+  const { topics, dialogueId }: {topics: string[], dialogueId: string} = data;
 
   // basically enable the pulse when a topic is added
   useEffect(() => setNotification(true), [topics.length]);
+
+  if (loading || !data) {
+    return null;
+  }
 
   return (
     <Drawer offside={offside} visible={topics.length}>
@@ -90,10 +111,8 @@ const TopicsDrawer: FC<Props> = ({ topics, focus, useTopic }) => {
       {topics.map((topicId) => (
         <TopicListing
           key={topicId}
-          id={topicId}
-          topic={topicList[topicId]}
-          focus={focus}
-          useTopic={useTopic}
+          name={topicList[topicId].name}
+          useTopic={makeUseTopic(dialogueId, topicId)}
         />
       ))}
     </Drawer>

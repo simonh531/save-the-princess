@@ -7,7 +7,7 @@ export default {
   activate: ():void => {
     switch (focusId()) {
       case 'princess1':
-        setDialogue('testprincess/tutorial0');
+        setDialogue('testprincess/tutorial');
         break;
       case 'princess':
         setDialogue('testprincess/birthdayPout');

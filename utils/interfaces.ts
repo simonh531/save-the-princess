@@ -48,6 +48,7 @@ export interface DialogueInteraction {
 
 export interface Dialogue {
   text: string
+  speaker?: string,
   next?: string
   effect?: () => void
   actions?: Array<() => void>

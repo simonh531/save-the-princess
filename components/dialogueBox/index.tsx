@@ -1,10 +1,19 @@
 import {
-  FC, useState, useEffect, MutableRefObject,
+  FC, useState, useEffect, useRef, SetStateAction, Dispatch,
 } from 'react';
 import styled from 'styled-components';
 import ReactMarkdown from 'react-markdown';
+import { gql, useQuery } from '@apollo/client';
 import { Dialogue } from '../../utils/interfaces';
 import * as styles from './styles';
+import Dialogues from '../../dialogue';
+import { prevDialogue, setDialogue, unfocus } from '../../data/state';
+
+const DIALOGUE = gql`
+  query GetDialogueId {
+    dialogueId
+  }
+`;
 
 const Box = styled.div<{ visible: string, extra: string }>`
   grid-area: dialogueBox;
@@ -23,7 +32,7 @@ const Box = styled.div<{ visible: string, extra: string }>`
 
 const TextBox = styled.div`
   flex: 1;
-  font-size: 1.4em;
+  font-size: 1.2em;
 `;
 
 const ActionText = styled.span`
@@ -70,21 +79,99 @@ const disallowed = ['hr'];
 const speed = 25;
 
 interface Props {
-  dialogue: Dialogue
-  theme: string
+  setAdvance: Dispatch<SetStateAction<() => void>>
   advance: () => void
-  isTalking: boolean
-  // eslint-disable-next-line no-unused-vars
-  setIsTalking: (a: boolean) => void
-  endDialogue: MutableRefObject<boolean>,
 }
 const DialogueBox: FC<Props> = ({
-  dialogue, theme, advance, isTalking, setIsTalking, endDialogue,
+  setAdvance, advance,
 }) => {
-  const [text, setText] = useState(setEmptyDialogue(dialogue.text, theme));
+  const { loading, /* error, */ data } = useQuery(DIALOGUE);
+  const endDialogue = useRef(false);
+  const [isTalking, setIsTalking] = useState(false);
+  const [text, setText] = useState('');
+  const { dialogueId } = data;
+
+  let wait = false;
+  let isSequence = false;
+  let sequenceLength = 0;
+  let keys = [''];
+  let dialogue: Dialogue;
+  let theme = '';
+  let continueText;
+
+  if (dialogueId) {
+    keys = dialogueId.split('/');
+    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
+      const temp = Dialogues[keys[0]][keys[1]];
+      if (Array.isArray(temp)) {
+        isSequence = true;
+        sequenceLength = temp.length;
+        if (keys.length !== 3) { // no index
+          keys.push('0');
+          setDialogue(`${dialogueId}/0`);
+          wait = true;
+        }
+        dialogue = temp[parseInt(keys[2], 10)];
+      } else {
+        dialogue = temp;
+      }
+      if (dialogue.next === '') {
+        continueText = 'End';
+      } else if (dialogue.next === 'return') {
+        continueText = 'Return ⮌';
+      } else if (dialogue.next || (isSequence && parseInt(keys[2], 10) < sequenceLength)) {
+        continueText = 'Continue ➤';
+      }
+      if (dialogue.speaker) {
+        theme = dialogue.speaker;
+      } else {
+        [theme] = keys;
+      }
+    } else {
+      theme = '';
+    }
+  }
+
+  // handle dialogue box
+  useEffect(() => {
+    if (dialogueId && dialogue.effect) {
+      dialogue.effect();
+    }
+  }, [dialogueId]);
+  useEffect(() => {
+    if (dialogueId) { // changed to new dialogue
+      if (isTalking) {
+        setAdvance(() => () => {
+          endDialogue.current = true;
+        });
+      } else if (isSequence && parseInt(keys[2], 10) < sequenceLength - 1) {
+        setAdvance(() => () => {
+          keys[2] = `${parseInt(keys[2], 10) + 1}`;
+          setDialogue(keys.join('/'));
+        });
+      } else if (typeof dialogue.next === 'string') {
+        if (dialogue.next === '') {
+          // should happen
+          setAdvance(() => () => {
+            unfocus();
+          });
+        } else if (dialogue.next === 'return') {
+          setAdvance(() => () => {
+            prevDialogue();
+          });
+        } else {
+          setAdvance(() => () => {
+            setDialogue(dialogue.next || '');
+          });
+        }
+      }
+    } else { // changed to no dialogue
+      setAdvance(() => () => { /* do nothing */ });
+    }
+  }, [dialogueId, isTalking]);
 
   useEffect(() => {
-    let newText = setEmptyDialogue(dialogue.text, theme);
+    let newText = '';
     let start: number;
     let id: number;
     let index = 0;
@@ -111,7 +198,9 @@ const DialogueBox: FC<Props> = ({
         }
         if (char) {
           newText = `${newText.slice(0, index)}${'*'.repeat(asteriskLength)}${char}${'*'.repeat(asteriskLength)}${newText.slice(index)}`;
-          setText(newText);
+          if (char !== ' ') { // trailing spaces cause trouble
+            setText(newText);
+          }
           index += 1;
           prevTime += 1;
         }
@@ -121,31 +210,26 @@ const DialogueBox: FC<Props> = ({
       } else {
         setText(dialogue.text);
         setIsTalking(false);
-        // eslint-disable-next-line no-param-reassign
         endDialogue.current = false;
       }
     }
 
     setText(newText);
 
-    if (isSpeech(theme)) {
-      if (dialogue.text) {
+    if (isSpeech(theme) && !wait) { // need to wait or else runs back to back
+      if (dialogueId) {
         setIsTalking(true);
+        newText = setEmptyDialogue(dialogue.text, theme);
         id = requestAnimationFrame(animate);
       }
       return () => cancelAnimationFrame(id);
     }
 
     return () => { /* do nothing */ };
-  }, [dialogue.text, endDialogue]);
+  }, [dialogueId]);
 
-  let continueText;
-  if (typeof dialogue.next === 'string') {
-    if (dialogue.next === '') {
-      continueText = 'End';
-    } else {
-      continueText = 'Continue ➤';
-    }
+  if (loading || !data) {
+    return null;
   }
 
   const components = {
@@ -153,7 +237,7 @@ const DialogueBox: FC<Props> = ({
     a(props: any) { // this type is broken
       const { children, href } = props;
       let action = () => { /* do nothing */ };
-      if (dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
+      if (dialogueId && dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
         action = dialogue.actions[parseInt(href, 10)];
       }
       return (
@@ -165,7 +249,7 @@ const DialogueBox: FC<Props> = ({
   };
 
   return (
-    <Box visible={dialogue.text} extra={boxStyles[theme]}>
+    <Box visible={dialogueId} extra={boxStyles[theme]}>
       <TextBox onClick={isTalking ? advance : () => { /* do nothing */ }}>
         <ReactMarkdown components={components} disallowedElements={disallowed}>
           {text}

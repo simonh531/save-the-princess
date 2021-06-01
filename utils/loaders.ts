@@ -16,6 +16,7 @@ import {
   Color,
   DirectionalLight,
   Euler,
+  Camera,
 } from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 
@@ -70,8 +71,9 @@ function placeInstanceAtDummy(
 export async function loadLocation(
   scene: Scene,
   location: Location,
-  cameraDefaultPosition: Vector3,
+  setCameraDefaultPosition: Dispatch<SetStateAction<Vector3>>,
   camera: PerspectiveCamera,
+  dummyCamera: Camera,
   light: DirectionalLight,
   entityObjects: Object3D[], // objects that face you
   clickables: Record<string, Object3D>, // objects you can click on
@@ -85,6 +87,7 @@ export async function loadLocation(
   filteredBackgrounds: Record<string, BackgroundVersions>,
   setFilteredBackgrounds: Dispatch<SetStateAction<Record<string, BackgroundVersions>>>,
 ): Promise<void> {
+  const cameraPosition = new Vector3();
   const loader = new TextureLoader();
   const dummy = new Object3D();
   const {
@@ -92,30 +95,32 @@ export async function loadLocation(
   } = location;
 
   function filterBackground() {
-    const image = new Image();
-    image.src = background;
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    image.addEventListener('load', () => {
-      canvas.width = image.width;
-      canvas.height = image.height;
-      if (ctx) {
-        ctx.drawImage(image, 0, 0);
-        const imageData = ctx.getImageData(0, 0, image.width, image.height);
-        setFilteredBackgrounds({
-          ...filteredBackgrounds,
-          [background]: {
-            default: new ImageData(imageData.data, imageData.width),
-            sunset: new ImageData(
-              colorLookup(lookupTables.LateSunset, imageData.data), imageData.width,
-            ),
-            night: new ImageData(
-              colorLookup(lookupTables.nightfromday, imageData.data), imageData.width,
-            ),
-          },
-        });
-      }
-    });
+    if (!filteredBackgrounds[background]) { // don't reload if already exists
+      const image = new Image();
+      image.src = background;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      image.addEventListener('load', () => {
+        canvas.width = image.width;
+        canvas.height = image.height;
+        if (ctx) {
+          ctx.drawImage(image, 0, 0);
+          const imageData = ctx.getImageData(0, 0, image.width, image.height);
+          setFilteredBackgrounds({
+            ...filteredBackgrounds,
+            [background]: {
+              default: new ImageData(imageData.data, imageData.width),
+              sunset: new ImageData(
+                colorLookup(lookupTables.LateSunset, imageData.data), imageData.width,
+              ),
+              night: new ImageData(
+                colorLookup(lookupTables.nightfromday, imageData.data), imageData.width,
+              ),
+            },
+          });
+        }
+      });
+    }
   }
 
   async function createInstancedMeshes(
@@ -294,12 +299,14 @@ export async function loadLocation(
     Object.values(tileType).forEach((wall) => {
       wall.instanceMatrix.needsUpdate = true;
     });
-    cameraDefaultPosition.set(
+    cameraPosition.set(
       average(xValues) * cubeUnit,
       1.5,
       average(zValues) * cubeUnit,
     );
-    camera.position.copy(cameraDefaultPosition);
+    setCameraDefaultPosition(cameraPosition);
+    dummyCamera.position.copy(cameraPosition);
+    camera.position.copy(cameraPosition);
   }
 
   async function loadPlane(
@@ -389,11 +396,16 @@ export async function loadLocation(
         map: texture,
       });
       const entityMesh = new Mesh(geometry, material);
-      entityMesh.scale.set(scale, -scale, -0.1);
+      entityMesh.scale.set(scale, -scale, -0.01);
       entityMesh.castShadow = true;
       entityMesh.receiveShadow = true;
       entityMesh.name = id;
       entityMesh.position.set(entity.x * cubeUnit, entityData.height / 2, entity.z * cubeUnit);
+      entityMesh.lookAt(
+        cameraPosition.x,
+        entityData.height / 2,
+        cameraPosition.z,
+      );
       scene.add(entityMesh);
       cleanupList.push(entityMesh);
       entityObjects.push(entityMesh);
@@ -419,7 +431,7 @@ export async function loadLocation(
     scene.add(ambientLight);
   }
 
-  loadWalls();
+  const done = loadWalls();
   horizontalPlanes.forEach((plane, index) => {
     if (index === 0) { // ground plane
       loadPlane(plane, -depth / 2, cubeUnit, new Euler(-Math.PI / 2, 0, 0), false, true);
@@ -429,9 +441,11 @@ export async function loadLocation(
       );
     }
   });
+  loadAmbientLights();
+  filterBackground();
+
+  await done; // do this so that entities can face the camera
   if (entities) {
     loadEntities(entities);
   }
-  loadAmbientLights();
-  filterBackground();
 }

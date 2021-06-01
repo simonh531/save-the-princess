@@ -11,8 +11,21 @@ export function setFocus(newFocus: string):void {
   focusId(newFocus);
 }
 
+let prevDialogueId = '';
 export function setDialogue(newDialogue: string):void {
-  dialogueId(newDialogue);
+  prevDialogueId = dialogueId();
+  const newKeys = newDialogue.split('/');
+  if (newKeys.length === 1) {
+    const oldKeys = prevDialogueId.split('/');
+    dialogueId(`${oldKeys[0]}/${newDialogue}`);
+  } else {
+    dialogueId(newDialogue);
+  }
+}
+
+export function prevDialogue():void {
+  dialogueId(prevDialogueId);
+  prevDialogueId = '';
 }
 
 export function unfocus():void {

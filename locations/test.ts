@@ -52,9 +52,9 @@ const test:Location = {
       z: 3.5,
       clickable: true,
     },
-    princess3: {
-      entityId: 'testprincess',
-      x: 2,
+    hyde: {
+      entityId: 'hyde',
+      x: 2.4,
       z: 3,
       clickable: true,
     },

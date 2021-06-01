@@ -19,11 +19,7 @@ const Grid = styled.div`
     "topics dialogueBox items";
 `;
 
-interface Props {
-  children: ReactNode,
-}
-
-const GameGrid: FC<Props> = ({ children }:Props) => (
+const GameGrid: FC<{children: ReactNode}> = ({ children }) => (
   <Grid>
     {children}
   </Grid>

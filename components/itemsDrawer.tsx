@@ -1,12 +1,21 @@
 import { FC, useEffect, useState } from 'react';
 import styled from 'styled-components';
 import BusinessCenterIcon from '@material-ui/icons/BusinessCenter';
+import { gql, useQuery } from '@apollo/client';
 import { setDialogue } from '../data/state';
-import { Item } from '../utils/interfaces';
+import { Dialogue, Item } from '../utils/interfaces';
 import NotificationDot from './notificationDot';
 import * as Items from '../items';
+import Dialogues from '../dialogue';
 
 const itemList:Record<string, Item> = Items;
+
+const ITEMS = gql`
+  query GetItems {
+    dialogueId
+    items
+  }
+`;
 
 const Drawer = styled.div<{ offside: boolean, visible: number }>`
   grid-area: items;
@@ -44,42 +53,54 @@ const Listing = styled.div`
   user-select: none;
 `;
 
-function ItemListing({
-  id, item, focus, useItem,
-}:{
-  // buggy
-  // eslint-disable-next-line no-unused-vars
-  id: string, item: Item, focus: string, useItem: (itemId: string) => void
-}) {
-  const click = () => {
-    if (!focus) {
-      setDialogue(`items/${id}`);
-    } else {
-      useItem(id);
-    }
-  };
+function ItemListing({ name, useItem }:{ name: string, useItem: () => void }) {
   return (
-    <Listing onClick={click}>
-      {item.name}
+    <Listing onClick={useItem}>
+      {name}
     </Listing>
   );
 }
 
-interface Props {
-  items: Array<string>
-  focus: string
-  useItem: () => void
-}
-const ItemsDrawer: FC<Props> = ({ items, focus, useItem }) => {
+const makeUseItem = (dialogueId: string, id: string) => {
+  let action = () => { /* do nothing */ };
+  if (dialogueId) {
+    const keys = dialogueId.split('/');
+    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
+      const temp = Dialogues[keys[0]][keys[1]];
+      let dialogue: Dialogue;
+      if (!Array.isArray(temp) || keys.length === 3) {
+        if (Array.isArray(temp)) {
+          dialogue = temp[parseInt(keys[2], 10)];
+        } else {
+          dialogue = temp;
+        }
+        if (dialogue.item && dialogue.item[id]) {
+          action = dialogue.item[id];
+        } else {
+          action = () => setDialogue(`items/${id}`);
+        }
+      }
+    }
+  }
+  return action;
+};
+
+const ItemsDrawer: FC = () => {
+  const { loading, /* error, */ data } = useQuery(ITEMS);
   const [offside, setOffside] = useState(true);
   const [notification, setNotification] = useState(false);
   const toggle = () => {
     setOffside(!offside);
     setNotification(false);
   };
+  const { items, dialogueId }: {items: string[], dialogueId: string} = data;
 
   // basically enable the pulse when an item is added
   useEffect(() => setNotification(true), [items.length]);
+
+  if (loading || !data) {
+    return null;
+  }
 
   return (
     <Drawer offside={offside} visible={items.length}>
@@ -90,10 +111,8 @@ const ItemsDrawer: FC<Props> = ({ items, focus, useItem }) => {
       {items.map((itemId) => (
         <ItemListing
           key={itemId}
-          id={itemId}
-          item={itemList[itemId]}
-          focus={focus}
-          useItem={useItem}
+          name={itemList[itemId].name}
+          useItem={makeUseItem(dialogueId, itemId)}
         />
       ))}
     </Drawer>
