@@ -1,4 +1,5 @@
 import { FC, useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import styled from 'styled-components';
 import MenuIcon from '@material-ui/icons/Menu';
 import ChatIcon from '@material-ui/icons/Chat';
@@ -10,6 +11,7 @@ import Items from '../data/items';
 import * as CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
 import { StateItem } from '../utils/interfaces';
+import { setDialogue } from '../data/state';
 // import NotificationDot from './notificationDot';
 
 const characterStats:Record<string, Record<string, number>> = CharacterStats;
@@ -41,8 +43,7 @@ const Tab = styled.div`
   position: absolute;
   top: 0;
   left: 100%;
-  width: 44px;
-  padding-right: 4px;
+  width: 48px;
   height: 48px;
   border-radius: 0 50% 50% 0;
   background-color: white;
@@ -50,6 +51,19 @@ const Tab = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+`;
+
+const IconPadding = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 50%;
+
+  :hover {
+    background-color: ${(props) => props.theme.backgroundColor};
+    color: ${(props) => props.theme.color};
+  }
 `;
 
 const MenuTabs = styled.div`
@@ -78,7 +92,7 @@ const MenuTab = styled.div<{active: boolean, top?: string}>`
   `)}
 `;
 
-const Listing = styled.div<{active?: boolean}>`
+const ListItem = styled.div<{active?: boolean}>`
   padding: 6px 10px;
   font-size: 1.2em;
   cursor: pointer;
@@ -94,6 +108,27 @@ const Listing = styled.div<{active?: boolean}>`
   `)}
 `;
 
+const Listing = styled.div`
+  flex: 1;
+`;
+
+const Info = styled.div<{visible: string}>`
+  position: relative;
+  height: ${(props) => (props.visible ? '200px' : '0')};
+  padding: 0 10px;
+
+  transition: height 0.4s;
+`;
+
+const Line = styled.div`
+  height: 1px;
+  background-color: black;
+  position: absolute;
+  top: 0;
+  left: 5%;
+  right: 5%;
+`;
+
 const levelName = ['Basic', 'Intermediate', 'Advanced'];
 
 const calcStats = (base: Record<string, number>, checks: Record<string, number>) => {
@@ -107,26 +142,39 @@ const calcStats = (base: Record<string, number>, checks: Record<string, number>)
   return calculatedStats;
 };
 
-const MenuDrawer: FC<{
-  // eslint-disable-next-line no-unused-vars
-  setInfoId: (text: string) => void,
-  close: () => void,
-  infoId: string
-}> = ({ setInfoId, close, infoId }) => {
+const ActionText = styled.span`
+  color: blue;
+  cursor: pointer;
+
+  :hover {
+    opacity: 0.8
+  }
+`;
+
+const H3 = styled.h3`
+  margin-block-end: 0;
+`;
+
+const disallowed = ['hr'];
+
+const MenuDrawer: FC = () => {
   const { loading, /* error, */ data } = useQuery(USABLES);
   const [offside, setOffside] = useState(true);
   const [activeTab, setActiveTab] = useState('topics');
+  const [infoId, setInfoId] = useState('');
   // const [notification, setNotification] = useState(false);
   const toggle = () => {
-    if (!offside) {
-      close();
-    }
     setOffside(!offside);
     // setNotification(false);
   };
   const { topics, items, checks } = data;
 
-  useEffect(close, [activeTab]); // close info when tab switches
+  useEffect(() => setInfoId(''), [activeTab]); // close info when tab switches
+  useEffect(() => {
+    if (!offside) {
+      setInfoId('');
+    }
+  }, [offside]); // close info when reopening
 
   // basically enable the pulse when a topic is added
   // useEffect(() => setNotification(true), [topics.length]);
@@ -134,16 +182,16 @@ const MenuDrawer: FC<{
   let listing = [];
   if (activeTab === 'topics') {
     listing = topics.map((id: string) => (
-      <Listing key={id} onClick={() => setInfoId(`topic/${id}`)} active={infoId === `topic/${id}`}>
+      <ListItem key={id} onClick={() => setInfoId(`topic/${id}`)} active={infoId === `topic/${id}`}>
         {Topics[id].name}
-      </Listing>
+      </ListItem>
     ));
   } else if (activeTab === 'items') {
     listing = items.map((item: StateItem) => (
-      <Listing key={item.id} onClick={() => setInfoId(`item/${item.id}`)} active={infoId === `item/${item.id}`}>
+      <ListItem key={item.id} onClick={() => setInfoId(`item/${item.id}`)} active={infoId === `item/${item.id}`}>
         {Items[item.id].name}
         {item.quantity > 1 ? ` × ${item.quantity}` : ''}
-      </Listing>
+      </ListItem>
     ));
   } else if (activeTab === 'skills') {
     const baseSkills = characterStats[checks.identity];
@@ -151,12 +199,12 @@ const MenuDrawer: FC<{
     Object.entries(calculatedStats).forEach(([id, level]) => {
       if (level) {
         listing.push(
-          <Listing key={id}>
+          <ListItem key={id}>
             {Skills[id].name}
             :
             {' '}
             {levelName[level - 1]}
-          </Listing>,
+          </ListItem>,
         );
       }
     });
@@ -164,11 +212,9 @@ const MenuDrawer: FC<{
 
   useEffect(() => { // handle keyboard
     function handleKeydown(event:KeyboardEvent) {
-      // console.log(event);
       switch (event.code) {
         case 'KeyT':
           if (!offside && activeTab === 'topics') {
-            close();
             setOffside(true);
           } else {
             setActiveTab('topics');
@@ -177,7 +223,6 @@ const MenuDrawer: FC<{
           break;
         case 'KeyI':
           if (!offside && activeTab === 'items') {
-            close();
             setOffside(true);
           } else {
             setActiveTab('items');
@@ -186,7 +231,6 @@ const MenuDrawer: FC<{
           break;
         case 'KeyS':
           if (!offside && activeTab === 'skills') {
-            close();
             setOffside(true);
           } else {
             setActiveTab('skills');
@@ -201,6 +245,54 @@ const MenuDrawer: FC<{
     return () => window.removeEventListener('keydown', handleKeydown);
   }, [offside, activeTab]);
 
+  let title = '';
+  let text = '';
+  let actionList: (string | (() => void))[];
+  const keys = infoId.split('/');
+  if (keys[0] === 'topic') {
+    title = Topics[keys[1]].name;
+    const { description, actions } = Topics[keys[1]];
+    if (typeof description === 'string') {
+      text = description;
+    } else {
+      text = description();
+    }
+    if (actions) {
+      actionList = actions;
+    }
+  } else if (keys[0] === 'item') {
+    title = Items[keys[1]].name;
+    const { description, actions } = Items[keys[1]];
+    if (typeof description === 'string') {
+      text = description;
+    } else {
+      text = description();
+    }
+    if (actions) {
+      actionList = actions;
+    }
+  }
+
+  const components = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    a(props: any) { // this type is broken
+      const { children, href } = props;
+      const temp = actionList[parseInt(href, 10)];
+      let action;
+      if (typeof temp === 'string') {
+        action = () => setDialogue(temp);
+      } else {
+        action = temp;
+      }
+      return (
+        <ActionText onClick={action}>
+          {children}
+        </ActionText>
+      );
+    },
+    h3: H3,
+  };
+
   if (loading || !data) {
     return null;
   }
@@ -208,7 +300,9 @@ const MenuDrawer: FC<{
   return (
     <Drawer offside={offside}>
       <Tab onClick={toggle}>
-        <MenuIcon fontSize="large" />
+        <IconPadding>
+          <MenuIcon fontSize="large" />
+        </IconPadding>
         {/* {notification ? <NotificationDot top="2px" right="2px" /> : null} */}
       </Tab>
       <MenuTabs>
@@ -232,7 +326,15 @@ const MenuDrawer: FC<{
           <AccessibilityNewIcon fontSize="large" />
         </MenuTab>
       </MenuTabs>
-      {listing}
+      <Listing>
+        {listing}
+      </Listing>
+      <Info visible={text}>
+        {text && <Line />}
+        <ReactMarkdown components={components} disallowedElements={disallowed}>
+          {`### ${title}\n\n${text}`}
+        </ReactMarkdown>
+      </Info>
     </Drawer>
   );
 };

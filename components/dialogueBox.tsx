@@ -69,6 +69,7 @@ const Triangle = styled.div`
 function isSpeech(speaker: string) {
   if (
     speaker === 'present'
+    || speaker === 'locations'
   ) {
     return false;
   }

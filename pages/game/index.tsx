@@ -20,8 +20,9 @@ import {
   Object3D,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
+import RoomIcon from '@material-ui/icons/Room';
 
-import { setFocus } from '../../data/state';
+import { setDialogue, setFocus } from '../../data/state';
 import { useWindowSize, useMousePositionEffect } from '../../utils/hooks';
 import { BackgroundVersions, Location, LookupTable } from '../../utils/interfaces';
 import { loadLocation } from '../../utils/loaders';
@@ -30,9 +31,12 @@ import Locations from '../../locations';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
+import MenuDrawer from '../../components/menuDrawer';
+import ChoiceDrawer from '../../components/choiceDrawer';
 
 const GAME_STATE = gql`
   query GetGameState {
+    dialogueId,
     focusId,
     locationId,
     time,
@@ -44,6 +48,29 @@ const GameArea = styled.main`
   height: 100vh;
   width: 100vw;
   overflow:hidden;
+`;
+
+const LocationDialogueButton = styled.div<{visible: boolean}>`
+  height: 48px;
+  width: 48px;
+  position: absolute;
+  left: calc(50% - 24px);
+  bottom: 18px;
+  background-color: white;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  pointer-events: ${(props) => (props.visible ? 'auto' : 'none')};
+  opacity: ${(props) => (props.visible ? '0.95' : '0')};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s;
+
+  :hover {
+    background-color: ${(props) => props.theme.backgroundColor};
+    color: ${(props) => props.theme.color};
+  }
 `;
 
 const defaultAction = () => () => { /* do nothing */ };
@@ -82,7 +109,7 @@ const Game: FC = () => {
 
   let location:Location = defaultLocation;
   const {
-    focusId, locationId, time, checks,
+    dialogueId, focusId, locationId, time, checks,
   } = data;
 
   if (locationId && Locations[locationId]) {
@@ -452,6 +479,11 @@ const Game: FC = () => {
           setAdvance={setAdvanceAction}
           advance={advanceAction}
         />
+        <MenuDrawer />
+        <ChoiceDrawer />
+        <LocationDialogueButton visible={!dialogueId} onClick={() => setDialogue(`locations/${locationId}`)}>
+          <RoomIcon fontSize="large" />
+        </LocationDialogueButton>
       </GameGrid>
     </GameArea>
   );
