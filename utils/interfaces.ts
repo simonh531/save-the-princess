@@ -12,6 +12,7 @@ export interface Entity {
   file: string
   geometry: string
   height: number
+  cameraAdjustment?: number[]
   activate: () => void
 }
 
@@ -20,6 +21,7 @@ export interface LocationEntity {
   x: number
   z: number
   clickable: boolean
+  visible?: boolean
 }
 
 export interface Tile {
@@ -39,13 +41,19 @@ export interface Location {
   skyLightTexture: string,
   walls: Plane
   horizontalPlanes: Plane[]
-  entities?: Record<string, LocationEntity>
+  getEntities?: () => Record<string, LocationEntity>
+}
+
+export interface Theme {
+  backgroundColor: string,
+  color: string
 }
 
 export interface Dialogue {
-  text: string
+  text: (() => string) | string
   speaker?: string,
   next?: string
+  nextAction?: () => void
   effect?: () => void
   actions?: Array<(() => void) | string>
   topic?: Record<string, (() => void) | string>
@@ -54,10 +62,23 @@ export interface Dialogue {
 
 export interface Topic {
   name: string,
+  description: (() => string) | string,
+  actions?: Array<(() => void) | string>
 }
 
 export interface Item {
   name: string,
+  description: (() => string) | string,
+  actions?: Array<(() => void) | string>
+}
+
+export interface Skill {
+  name: string
+}
+
+export interface StateItem {
+  id: string
+  quantity: number
 }
 
 export interface BackgroundVersions {

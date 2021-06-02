@@ -5,9 +5,7 @@ export const intro:Dialogue[] = [
   {
     text: "Finally awake [Kalvin](0)? I haven't seen you *sleep so peacefully in a while*. We should be arriving at the Fidelia Castle in just a few hours.",
     actions: [
-      ():void => {
-        addTopic('kalvin');
-      },
+      'kalvin',
     ],
     topic: {
       kalvin: 'kalvin',
@@ -40,6 +38,7 @@ export const intro:Dialogue[] = [
 export const kalvin:Dialogue = {
   text: "I've known you since you were but a little kid. Your father couldn't find you a tutor that could deal with your antics until I came along.",
   next: '',
+  effect: () => addTopic('kalvin'),
 };
 
 export const present:Dialogue = {

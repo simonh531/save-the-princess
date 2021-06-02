@@ -1,39 +1,41 @@
 import {
   FC, useState, useEffect, useRef, SetStateAction, Dispatch,
 } from 'react';
-import styled from 'styled-components';
+import styled, { ThemeProvider } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { gql, useQuery } from '@apollo/client';
-import { Dialogue } from '../../utils/interfaces';
-import * as styles from './styles';
-import Dialogues from '../../dialogue';
-import { prevDialogue, setDialogue, unfocus } from '../../data/state';
+import { Dialogue, Theme } from '../utils/interfaces';
+import Themes from '../styles/characterThemes';
+import Dialogues from '../dialogue';
+import { prevDialogue, setDialogue, unfocus } from '../data/state';
 
 const DIALOGUE = gql`
   query GetDialogueId {
     dialogueId
+    checks
   }
 `;
 
-const Box = styled.div<{ visible: string, extra: string }>`
+const Box = styled.div<{ visible: string }>`
+  position: relative;
   grid-area: dialogueBox;
   display: flex;
   flex-direction: column;
   border-radius: 4px;
-  box-shadow: 0 0 2px 2px rgba(0,0,0,0.3);
   padding: 10px;
   padding-top: 0px;
   opacity: ${(props) => (props.visible ? '0.95' : '0')};
-  pointer-events: auto;
-  background-color: white;
-  ${(props) => props.extra}
+  pointer-events: ${(props) => (props.visible ? 'auto' : 'none')};
+  background-color: ${(props) => props.theme.backgroundColor};
+  color: ${(props) => props.theme.color};
+  filter: drop-shadow(0 0 2px rgba(0,0,0,0.2));
 
-  transition: 0.4s opacity;
-`;
+  transition: 0.4s opacity${(props) => (props.visible ? '' : ', background-color 0s 0.4s')};
+`; // turn on the transition for when it's on its way out
 
 const TextBox = styled.div`
   flex: 1;
-  font-size: 1.2em;
+  font-size: 1.4em;
 `;
 
 const ActionText = styled.span`
@@ -55,10 +57,19 @@ const ContinueBox = styled.div`
   }
 `;
 
-const boxStyles:Record<string, string> = styles;
+const Triangle = styled.div`
+  position: absolute;
+  left: calc(50% - 10px);
+  bottom: 100%;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 30px solid ${(props) => props.theme.backgroundColor};
+`;
 
-function isSpeech(theme: string) {
-  if (theme === 'description' || theme === 'thought' || theme === 'location') {
+function isSpeech(speaker: string) {
+  if (
+    speaker === 'present'
+  ) {
     return false;
   }
   return true;
@@ -77,7 +88,7 @@ function setEmptyDialogue(text: string, theme: string) {
 }
 
 const disallowed = ['hr'];
-const speed = 25;
+const speed = 20;
 
 interface Props {
   setAdvance: Dispatch<SetStateAction<() => void>>
@@ -90,14 +101,19 @@ const DialogueBox: FC<Props> = ({
   const endDialogue = useRef(false);
   const [isTalking, setIsTalking] = useState(false);
   const [text, setText] = useState('');
-  const { dialogueId } = data;
+  const { dialogueId, checks } = data;
 
   let wait = false;
   let isSequence = false;
   let sequenceLength = 0;
   let keys = [''];
-  let dialogue: Dialogue;
-  let theme = '';
+  let dialogue: Dialogue = {
+    text: '',
+  };
+  let theme: Theme = {
+    backgroundColor: 'transparent',
+    color: 'transparent',
+  };
   let continueText;
 
   if (dialogueId) {
@@ -123,23 +139,27 @@ const DialogueBox: FC<Props> = ({
       } else if (dialogue.next || (isSequence && parseInt(keys[2], 10) < sequenceLength)) {
         continueText = 'Continue ➤';
       }
-      if (dialogue.speaker) {
-        theme = dialogue.speaker;
+      if (isSpeech(keys[0])) {
+        if (dialogue.speaker) {
+          theme = Themes[dialogue.speaker];
+        } else {
+          theme = Themes[keys[0]];
+        }
       } else {
-        [theme] = keys;
+        theme = {
+          backgroundColor: 'white',
+          color: 'black',
+        };
       }
-    } else {
-      theme = '';
     }
   }
 
-  // handle dialogue box
   useEffect(() => {
-    if (dialogueId && dialogue.effect) {
+    if (dialogueId && dialogue.effect && !wait) { // wait will make it run twice
       dialogue.effect();
     }
   }, [dialogueId]);
-  useEffect(() => {
+  useEffect(() => { // handle advance
     if (dialogueId) { // changed to new dialogue
       if (isTalking) {
         setAdvance(() => () => {
@@ -150,19 +170,18 @@ const DialogueBox: FC<Props> = ({
           keys[2] = `${parseInt(keys[2], 10) + 1}`;
           setDialogue(keys.join('/'));
         });
+      } else if (dialogue.nextAction) {
+        const { nextAction } = dialogue;
+        setAdvance(() => nextAction);
       } else if (typeof dialogue.next === 'string') {
-        if (dialogue.next === '') {
-          // should happen
-          setAdvance(() => () => {
-            unfocus();
-          });
-        } else if (dialogue.next === 'return') {
-          setAdvance(() => () => {
-            prevDialogue();
-          });
+        const { next } = dialogue;
+        if (next === '') {
+          setAdvance(() => unfocus);
+        } else if (next === 'return') {
+          setAdvance(() => prevDialogue);
         } else {
           setAdvance(() => () => {
-            setDialogue(dialogue.next || '');
+            setDialogue(next || '');
           });
         }
       }
@@ -171,8 +190,15 @@ const DialogueBox: FC<Props> = ({
     }
   }, [dialogueId, isTalking]);
 
-  useEffect(() => {
+  useEffect(() => { // handle text scroll
     let newText = '';
+    const temp = dialogue.text;
+    let oldText: string;
+    if (typeof temp === 'function') {
+      oldText = temp();
+    } else {
+      oldText = temp;
+    }
     let start: number;
     let id: number;
     let index = 0;
@@ -183,18 +209,18 @@ const DialogueBox: FC<Props> = ({
       }
       // ready for new letter
       if ((timestamp - start) / speed > prevTime) {
-        let char = dialogue.text.charAt(index);
+        let char = oldText.charAt(index);
         // fastforward through markdown characters
         while (char && newText.charAt(index) === char) {
           index += 1;
-          char = dialogue.text.charAt(index);
+          char = oldText.charAt(index);
         }
         let asteriskLength = 0;
         // this will only happen for the first asterisks as
         // the second set gets skipped by the first while loop
         while (char === '*') {
           index += 1;
-          char = dialogue.text.charAt(index);
+          char = oldText.charAt(index);
           asteriskLength += 1;
         }
         if (char) {
@@ -206,10 +232,10 @@ const DialogueBox: FC<Props> = ({
           prevTime += 1;
         }
       }
-      if (dialogue.text.charAt(index) && !endDialogue.current) {
+      if (oldText.charAt(index) && !endDialogue.current) {
         id = requestAnimationFrame(animate);
       } else {
-        setText(dialogue.text);
+        setText(oldText);
         setIsTalking(false);
         endDialogue.current = false;
       }
@@ -217,13 +243,17 @@ const DialogueBox: FC<Props> = ({
 
     setText(newText);
 
-    if (isSpeech(theme) && !wait) { // need to wait or else runs back to back
-      if (dialogueId) {
-        setIsTalking(true);
-        newText = setEmptyDialogue(dialogue.text, theme);
-        id = requestAnimationFrame(animate);
+    if (isSpeech(keys[0])) {
+      if (!wait) { // need to wait or else runs back to back
+        if (dialogueId) {
+          setIsTalking(true);
+          newText = setEmptyDialogue(oldText, keys[0]);
+          id = requestAnimationFrame(animate);
+        }
+        return () => cancelAnimationFrame(id);
       }
-      return () => cancelAnimationFrame(id);
+    } else { // is not speech
+      setText(dialogue.text);
     }
 
     return () => { /* do nothing */ };
@@ -255,18 +285,22 @@ const DialogueBox: FC<Props> = ({
   };
 
   return (
-    <Box visible={dialogueId} extra={boxStyles[theme]}>
-      <TextBox onClick={isTalking ? advance : () => { /* do nothing */ }}>
-        <ReactMarkdown components={components} disallowedElements={disallowed}>
-          {text}
-        </ReactMarkdown>
-      </TextBox>
-      {continueText && (
-        <ContinueBox onClick={advance}>
-          {continueText}
-        </ContinueBox>
-      )}
-    </Box>
+    <ThemeProvider theme={theme}>
+      <Box visible={dialogueId}>
+        {isSpeech(keys[0]) && checks.identity !== dialogue.speaker
+        && <Triangle />}
+        <TextBox onClick={isTalking ? advance : () => { /* do nothing */ }}>
+          <ReactMarkdown components={components} disallowedElements={disallowed}>
+            {text}
+          </ReactMarkdown>
+        </TextBox>
+        {continueText && (
+          <ContinueBox onClick={advance}>
+            {continueText}
+          </ContinueBox>
+        )}
+      </Box>
+    </ThemeProvider>
   );
 };
 

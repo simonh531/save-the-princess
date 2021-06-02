@@ -30,14 +30,13 @@ import Locations from '../../locations';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
-import TopicsDrawer from '../../components/topicsDrawer';
-import ItemsDrawer from '../../components/itemsDrawer';
 
 const GAME_STATE = gql`
   query GetGameState {
     focusId,
     locationId,
     time,
+    checks,
   }
 `;
 
@@ -83,7 +82,7 @@ const Game: FC = () => {
 
   let location:Location = defaultLocation;
   const {
-    focusId, locationId, time,
+    focusId, locationId, time, checks,
   } = data;
 
   if (locationId && Locations[locationId]) {
@@ -99,6 +98,7 @@ const Game: FC = () => {
   const cleanupList = useRef<Mesh[]>([]);
   // eslint-disable-next-line comma-spacing
   const activates = useRef<Record<string,() => void>>({});
+  const cameraAdjustments = useRef<Record<string, number[]>>({});
   const ambientLight = useRef(new AmbientLight(0xffffff, 0));
   const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
@@ -165,6 +165,7 @@ const Game: FC = () => {
         entities.current,
         clickables.current,
         activates.current,
+        cameraAdjustments.current,
         cleanupList.current,
         ambientLight.current,
         hemisphereLight.current,
@@ -370,8 +371,10 @@ const Game: FC = () => {
 
   useEffect(() => { // handle camera movement on focus change
     if (focusId && clickables.current[focusId]) { // second part necessary for refresh
-      const focusPosition = clickables.current[focusId].position.clone()
-        .add(new Vector3(0, 0.2, 0)); // focus on face
+      const focusPosition = clickables.current[focusId].position.clone();
+      if (cameraAdjustments.current[focusId]) {
+        focusPosition.add(new Vector3(...cameraAdjustments.current[focusId]));
+      }
       // math
       const destination = cameraDefaultPosition.clone()
         .sub(focusPosition)
@@ -384,6 +387,27 @@ const Game: FC = () => {
       dummyCamera.current.position.copy(cameraDefaultPosition);
     }
   }, [focusId, cameraDefaultPosition]);
+
+  // update entities based on checks
+  useEffect(() => {
+    if (locationId && location && location.getEntities) {
+      const entityValues = location.getEntities();
+      entities.current.forEach((entity) => {
+        if (entityValues[entity.name]) {
+          const { x, z, visible } = entityValues[entity.name];
+          entity.position.setX(x * cubeUnit);
+          entity.position.setZ(z * cubeUnit);
+          if (visible === false) {
+            scene.current.remove(entity);
+            delete clickables.current[entity.name];
+          } else {
+            scene.current.add(entity);
+            clickables.current[entity.name] = entity;
+          }
+        }
+      });
+    }
+  }, [checks, locationId]);
 
   useEffect(() => { // animation loop
     const prevPosition = new Vector3();
@@ -428,8 +452,6 @@ const Game: FC = () => {
           setAdvance={setAdvanceAction}
           advance={advanceAction}
         />
-        <TopicsDrawer />
-        <ItemsDrawer />
       </GameGrid>
     </GameArea>
   );

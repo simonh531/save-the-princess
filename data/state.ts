@@ -1,10 +1,11 @@
 import { makeVar } from '@apollo/client';
+import { StateItem } from '../utils/interfaces';
 
 export const dialogueId = makeVar('');
 export const focusId = makeVar('');
 export const locationId = makeVar('test');
 export const topics = makeVar<Array<string>>([]);
-export const items = makeVar<Array<string>>([]);
+export const items = makeVar<Array<StateItem>>([{ id: 'pocketwatch', quantity: 1 }]);
 export const time = makeVar(12);
 
 export function setFocus(newFocus: string):void {
@@ -40,7 +41,13 @@ export function addTopic(topicId:string):void {
 }
 
 export function addItem(itemId:string):void {
-  items([...items(), itemId]);
+  const exists = items().find((item) => item.id === itemId);
+  if (exists) {
+    exists.quantity += 1;
+    items([...items()]);
+  } else {
+    items([...items(), { id: itemId, quantity: 1 }]);
+  }
 }
 
 export function setTime(newTime:number):void {

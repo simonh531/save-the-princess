@@ -1,4 +1,5 @@
 import { Location } from '../utils/interfaces';
+import { checks } from '../data/checks';
 
 const test:Location = {
   background: '/assets/test/testfield.jpg',
@@ -33,7 +34,7 @@ const test:Location = {
       },
     },
   ],
-  entities: {
+  getEntities: () => ({
     princess: {
       entityId: 'testprincess',
       x: 1.9,
@@ -63,8 +64,9 @@ const test:Location = {
       x: 1.5,
       z: 3,
       clickable: true,
+      visible: !checks().presentTaken,
     },
-  },
+  }),
 };
 
 export default test;

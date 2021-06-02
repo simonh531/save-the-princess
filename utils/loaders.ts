@@ -78,6 +78,7 @@ export async function loadLocation(
   entityObjects: Object3D[], // objects that face you
   clickables: Record<string, Object3D>, // objects you can click on
   activates: Record<string, () => void>, // activate effect
+  cameraAdjustments: Record<string, number[]>, // camera focus position
   cleanupList: Mesh[],
   ambientLight: AmbientLight,
   hemisphereLight: HemisphereLight,
@@ -91,7 +92,7 @@ export async function loadLocation(
   const loader = new TextureLoader();
   const dummy = new Object3D();
   const {
-    walls, horizontalPlanes, entities, background, groundLightTexture, skyLightTexture,
+    walls, horizontalPlanes, getEntities, background, groundLightTexture, skyLightTexture,
   } = location;
 
   function filterBackground() {
@@ -406,13 +407,16 @@ export async function loadLocation(
         entityData.height / 2,
         cameraPosition.z,
       );
-      scene.add(entityMesh);
       cleanupList.push(entityMesh);
       entityObjects.push(entityMesh);
-      if (entity.clickable) {
-        clickables[id] = entityMesh;
-        // add activate here because id and entityId can be different and is hard to retrieve
-        activates[id] = entityData.activate;
+      cameraAdjustments[id] = entityData.cameraAdjustment || [0, 0, 0];
+      if (entity.visible !== false) {
+        scene.add(entityMesh);
+        if (entity.clickable) {
+          clickables[id] = entityMesh;
+          // add activate here because id and entityId can be different and is hard to retrieve
+          activates[id] = entityData.activate;
+        }
       }
     });
   }
@@ -445,7 +449,7 @@ export async function loadLocation(
   filterBackground();
 
   await done; // do this so that entities can face the camera
-  if (entities) {
-    loadEntities(entities);
+  if (getEntities) {
+    loadEntities(getEntities());
   }
 }
