@@ -26,6 +26,7 @@ export interface LocationEntity {
 
 export interface Tile {
   url: string
+  colors?: number[]
   geometry?: string
   repeat?: number
 }

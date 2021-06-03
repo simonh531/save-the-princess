@@ -51,8 +51,8 @@ const GameArea = styled.main`
 `;
 
 const LocationDialogueButton = styled.div<{visible: boolean}>`
-  height: 48px;
-  width: 48px;
+  height: 60px;
+  width: 60px;
   position: absolute;
   left: calc(50% - 24px);
   bottom: 18px;
@@ -66,6 +66,7 @@ const LocationDialogueButton = styled.div<{visible: boolean}>`
   align-items: center;
   justify-content: center;
   transition: opacity 0.4s;
+  font-size: 2.8em;
 
   :hover {
     background-color: ${(props) => props.theme.backgroundColor};
@@ -482,7 +483,7 @@ const Game: FC = () => {
         <MenuDrawer />
         <ChoiceDrawer />
         <LocationDialogueButton visible={!dialogueId} onClick={() => setDialogue(`locations/${locationId}`)}>
-          <RoomIcon fontSize="large" />
+          <RoomIcon fontSize="inherit" />
         </LocationDialogueButton>
       </GameGrid>
     </GameArea>

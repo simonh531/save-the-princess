@@ -1,11 +1,11 @@
 import { gql, useQuery } from '@apollo/client';
-import { FC } from 'react';
+import { FC, ReactNode } from 'react';
 import styled from 'styled-components';
 import { Dialogue, StateItem } from '../utils/interfaces';
 import Dialogues from '../dialogue';
 import Topics from '../data/topics';
 import Items from '../data/items';
-import { setDialogue } from '../data/state';
+import { getAction } from '../utils/getters';
 
 const USABLE_DIALOGUE = gql`
   query GetChecks {
@@ -27,7 +27,7 @@ const Drawer = styled.div<{ visible: number }>`
   pointer-events: ${(props) => (props.visible ? 'auto' : 'none')};
   left: ${(props) => (props.visible ? '0' : '20px')};
   opacity: ${(props) => (props.visible ? '0.95' : '0')};
-  font-size: 1.2em;
+  font-size: 1.1em;
   overflow: hidden;
   filter: drop-shadow(0 0 2px rgba(0,0,0,0.2));
 
@@ -59,7 +59,7 @@ const choiceDrawer: FC = () => {
     dialogueId: string, topics:string[], items:StateItem[],
   } = data;
 
-  const actions:{name: string, action: () => void}[] = [];
+  const actions:ReactNode[] = [];
   if (dialogueId) {
     const keys = dialogueId.split('/');
     if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
@@ -69,7 +69,7 @@ const choiceDrawer: FC = () => {
         if (keys[2]) {
           dialogue = temp[parseInt(keys[2], 10)];
         } else {
-          [dialogue] = temp;
+          [dialogue] = temp; // index 0
         }
       } else {
         dialogue = temp;
@@ -78,17 +78,13 @@ const choiceDrawer: FC = () => {
       if (dialogueTopic) {
         topics.forEach((id) => {
           if (dialogueTopic[id]) {
-            let action:() => void;
-            const actionTemp = dialogueTopic[id];
-            if (typeof actionTemp === 'string') {
-              action = () => setDialogue(actionTemp);
-            } else {
-              action = actionTemp;
-            }
-            actions.push({
-              name: Topics[id].name,
-              action,
-            });
+            actions.push(
+              <Choice onClick={getAction(dialogueTopic[id])} key={`topic/${id}`}>
+                &quot;
+                {Topics[id].name}
+                &quot;
+              </Choice>,
+            );
           }
         });
       }
@@ -96,17 +92,11 @@ const choiceDrawer: FC = () => {
       if (dialogueItem) {
         items.forEach(({ id }) => {
           if (dialogueItem[id]) {
-            let action:() => void;
-            const actionTemp = dialogueItem[id];
-            if (typeof actionTemp === 'string') {
-              action = () => setDialogue(actionTemp);
-            } else {
-              action = actionTemp;
-            }
-            actions.push({
-              name: Items[id].name,
-              action,
-            });
+            actions.push(
+              <Choice onClick={getAction(dialogueItem[id])} key={`item/${id}`}>
+                {Items[id].name}
+              </Choice>,
+            );
           }
         });
       }
@@ -119,11 +109,7 @@ const choiceDrawer: FC = () => {
 
   return (
     <Drawer visible={actions.length}>
-      {actions.map((action) => (
-        <Choice onClick={action.action}>
-          {action.name}
-        </Choice>
-      ))}
+      {actions}
     </Drawer>
   );
 };

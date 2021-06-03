@@ -11,7 +11,7 @@ import Items from '../data/items';
 import * as CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
 import { StateItem } from '../utils/interfaces';
-import { setDialogue } from '../data/state';
+import { getAction } from '../utils/getters';
 // import NotificationDot from './notificationDot';
 
 const characterStats:Record<string, Record<string, number>> = CharacterStats;
@@ -277,15 +277,8 @@ const MenuDrawer: FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     a(props: any) { // this type is broken
       const { children, href } = props;
-      const temp = actionList[parseInt(href, 10)];
-      let action;
-      if (typeof temp === 'string') {
-        action = () => setDialogue(temp);
-      } else {
-        action = temp;
-      }
       return (
-        <ActionText onClick={action}>
+        <ActionText onClick={getAction(actionList[parseInt(href, 10)])}>
           {children}
         </ActionText>
       );

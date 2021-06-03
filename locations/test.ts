@@ -10,6 +10,7 @@ const test:Location = {
     tiles: {
       255: {
         url: '/assets/test/testwall.png',
+        colors: [0xffffff],
         geometry: '/assets/test/testwall.svg',
       },
     },

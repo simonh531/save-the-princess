@@ -175,10 +175,13 @@ export async function loadLocation(
       wallMap = await loader.loadAsync(tile);
       geometry = new BoxGeometry(cubeUnit, cubeUnit, depth);
     }
-    const material = new MeshStandardMaterial({
+    let material:MeshStandardMaterial | MeshStandardMaterial[] = new MeshStandardMaterial({
       map: wallMap,
       transparent: typeof tile === 'string' || !tile.geometry,
     });
+    if (tile.colors) {
+      material = [material, ...tile.colors.map((color) => new MeshStandardMaterial({ color }))];
+    }
     const mesh = new InstancedMesh(
       geometry, material, count,
     );

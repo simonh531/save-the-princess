@@ -8,6 +8,7 @@ import { Dialogue, Theme } from '../utils/interfaces';
 import Themes from '../styles/characterThemes';
 import Dialogues from '../dialogue';
 import { prevDialogue, setDialogue, unfocus } from '../data/state';
+import { getAction, getText } from '../utils/getters';
 
 const DIALOGUE = gql`
   query GetDialogueId {
@@ -193,13 +194,7 @@ const DialogueBox: FC<Props> = ({
 
   useEffect(() => { // handle text scroll
     let newText = '';
-    const temp = dialogue.text;
-    let oldText: string;
-    if (typeof temp === 'function') {
-      oldText = temp();
-    } else {
-      oldText = temp;
-    }
+    const oldText = getText(dialogue.text);
     let start: number;
     let id: number;
     let index = 0;
@@ -269,13 +264,8 @@ const DialogueBox: FC<Props> = ({
     a(props: any) { // this type is broken
       const { children, href } = props;
       let action = () => { /* do nothing */ };
-      if (dialogueId && dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
-        const temp = dialogue.actions[parseInt(href, 10)];
-        if (typeof temp === 'string') {
-          action = () => setDialogue(temp);
-        } else {
-          action = temp;
-        }
+      if (dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
+        action = getAction(dialogue.actions[parseInt(href, 10)]);
       }
       return (
         <ActionText onClick={action}>

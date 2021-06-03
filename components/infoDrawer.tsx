@@ -1,9 +1,9 @@
 import { FC } from 'react';
 import styled from 'styled-components';
 import ReactMarkdown from 'react-markdown';
-import { setDialogue } from '../data/state';
 import Topics from '../data/topics';
 import Items from '../data/items';
+import { getText, getAction } from '../utils/getters';
 
 const Drawer = styled.div<{ visible: boolean, choiceVisible: number }>`
   height: ${(props) => (props.choiceVisible ? 'calc(100% - 208px)' : '100%')};
@@ -49,22 +49,14 @@ const InfoDrawer: FC<{
   if (keys[0] === 'topic') {
     title = Topics[keys[1]].name;
     const { description, actions } = Topics[keys[1]];
-    if (typeof description === 'string') {
-      text = description;
-    } else {
-      text = description();
-    }
+    text = getText(description);
     if (actions) {
       actionList = actions;
     }
   } else if (keys[0] === 'item') {
     title = Items[keys[1]].name;
     const { description, actions } = Items[keys[1]];
-    if (typeof description === 'string') {
-      text = description;
-    } else {
-      text = description();
-    }
+    text = getText(description);
     if (actions) {
       actionList = actions;
     }
@@ -74,15 +66,8 @@ const InfoDrawer: FC<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     a(props: any) { // this type is broken
       const { children, href } = props;
-      const temp = actionList[parseInt(href, 10)];
-      let action;
-      if (typeof temp === 'string') {
-        action = () => setDialogue(temp);
-      } else {
-        action = temp;
-      }
       return (
-        <ActionText onClick={action}>
+        <ActionText onClick={getAction(actionList[parseInt(href, 10)])}>
           {children}
         </ActionText>
       );
