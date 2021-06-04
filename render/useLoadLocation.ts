@@ -30,6 +30,7 @@ import {
 } from '../utils/interfaces';
 import colorLookup from '../utils/colorLookup';
 import MeshData from '../meshData';
+import Themes from '../styles/characterThemes';
 
 const LOCATION = gql`
   query GetGameState {
@@ -394,6 +395,13 @@ const useLoadLocation = async (
     const gameEntities:Record<string, GameEntity> = {};
     const svgLoader = new SVGLoader();
     await Promise.all(Object.entries(entityList).map(async ([id, entity]) => {
+      if (Themes[entity.meshId] && Themes[entity.meshId].vowel && Themes[entity.meshId].consonant) {
+        // load audio blips
+        // eslint-disable-next-line no-new
+        new Audio(Themes[entity.meshId].vowel);
+        // eslint-disable-next-line no-new
+        new Audio(Themes[entity.meshId].consonant);
+      }
       const entityData = MeshData[entity.meshId];
       const [svgData, texture] = await Promise.all([
         svgLoader.loadAsync(entityData.geometry),

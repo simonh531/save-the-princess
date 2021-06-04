@@ -1,6 +1,8 @@
-import { FC, useEffect, useState } from 'react';
+import {
+  FC, useEffect, useState,
+} from 'react';
 import ReactMarkdown from 'react-markdown';
-import styled from 'styled-components';
+import styled, { useTheme } from 'styled-components';
 import MenuIcon from '@material-ui/icons/Menu';
 import ChatIcon from '@material-ui/icons/Chat';
 import BusinessCenterIcon from '@material-ui/icons/BusinessCenter';
@@ -11,7 +13,7 @@ import Items from '../data/items';
 import * as CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
 import { StateItem } from '../utils/interfaces';
-import { getAction } from '../utils/getters';
+import { getText, getAction } from '../utils/getters';
 // import NotificationDot from './notificationDot';
 
 const characterStats:Record<string, Record<string, number>> = CharacterStats;
@@ -163,10 +165,21 @@ const MenuDrawer: FC = () => {
   const [activeTab, setActiveTab] = useState('topics');
   const [infoId, setInfoId] = useState('');
   // const [notification, setNotification] = useState(false);
-  const toggle = () => {
-    setOffside(!offside);
-    // setNotification(false);
-  };
+  const { consonant, vowel } = useTheme();
+  const [playHoverSound, setPlayHoverSound] = useState(() => () => { /* do nothing */ });
+  const [withClickSound, setWithClickSound] = useState(() => (func:() => void) => () => func());
+
+  useEffect(() => {
+    const hover = new Audio(vowel);
+    const click = new Audio(consonant);
+    setPlayHoverSound(() => () => hover.play());
+    setWithClickSound(() => (func:() => void) => () => {
+      click.play();
+      func();
+    });
+  }, []);
+
+  const toggle = withClickSound(() => setOffside(!offside));
   const { topics, items, checks } = data;
 
   useEffect(() => setInfoId(''), [activeTab]); // close info when tab switches
@@ -182,13 +195,23 @@ const MenuDrawer: FC = () => {
   let listing = [];
   if (activeTab === 'topics') {
     listing = topics.map((id: string) => (
-      <ListItem key={id} onClick={() => setInfoId(`topic/${id}`)} active={infoId === `topic/${id}`}>
+      <ListItem
+        key={id}
+        onClick={withClickSound(() => setInfoId(`topic/${id}}`))}
+        onMouseEnter={playHoverSound}
+        active={infoId === `topic/${id}`}
+      >
         {Topics[id].name}
       </ListItem>
     ));
   } else if (activeTab === 'items') {
     listing = items.map((item: StateItem) => (
-      <ListItem key={item.id} onClick={() => setInfoId(`item/${item.id}`)} active={infoId === `item/${item.id}`}>
+      <ListItem
+        key={item.id}
+        onClick={withClickSound(() => setInfoId(`item/${item.id}`))}
+        onMouseEnter={playHoverSound}
+        active={infoId === `item/${item.id}`}
+      >
         {Items[item.id].name}
         {item.quantity > 1 ? ` × ${item.quantity}` : ''}
       </ListItem>
@@ -214,28 +237,34 @@ const MenuDrawer: FC = () => {
     function handleKeydown(event:KeyboardEvent) {
       switch (event.code) {
         case 'KeyT':
-          if (!offside && activeTab === 'topics') {
-            setOffside(true);
-          } else {
-            setActiveTab('topics');
-            setOffside(false);
-          }
+          withClickSound(() => {
+            if (!offside && activeTab === 'topics') {
+              setOffside(true);
+            } else {
+              setActiveTab('topics');
+              setOffside(false);
+            }
+          })();
           break;
         case 'KeyI':
-          if (!offside && activeTab === 'items') {
-            setOffside(true);
-          } else {
-            setActiveTab('items');
-            setOffside(false);
-          }
+          withClickSound(() => {
+            if (!offside && activeTab === 'items') {
+              setOffside(true);
+            } else {
+              setActiveTab('items');
+              setOffside(false);
+            }
+          })();
           break;
         case 'KeyS':
-          if (!offside && activeTab === 'skills') {
-            setOffside(true);
-          } else {
-            setActiveTab('skills');
-            setOffside(false);
-          }
+          withClickSound(() => {
+            if (!offside && activeTab === 'skills') {
+              setOffside(true);
+            } else {
+              setActiveTab('skills');
+              setOffside(false);
+            }
+          })();
           break;
         default:
           break;
@@ -252,22 +281,14 @@ const MenuDrawer: FC = () => {
   if (keys[0] === 'topic') {
     title = Topics[keys[1]].name;
     const { description, actions } = Topics[keys[1]];
-    if (typeof description === 'string') {
-      text = description;
-    } else {
-      text = description();
-    }
+    text = getText(description);
     if (actions) {
       actionList = actions;
     }
   } else if (keys[0] === 'item') {
     title = Items[keys[1]].name;
     const { description, actions } = Items[keys[1]];
-    if (typeof description === 'string') {
-      text = description;
-    } else {
-      text = description();
-    }
+    text = getText(description);
     if (actions) {
       actionList = actions;
     }
@@ -278,7 +299,10 @@ const MenuDrawer: FC = () => {
     a(props: any) { // this type is broken
       const { children, href } = props;
       return (
-        <ActionText onClick={getAction(actionList[parseInt(href, 10)])}>
+        <ActionText
+          onClick={withClickSound(getAction(actionList[parseInt(href, 10)]))}
+          onMouseEnter={playHoverSound}
+        >
           {children}
         </ActionText>
       );
@@ -292,7 +316,7 @@ const MenuDrawer: FC = () => {
 
   return (
     <Drawer offside={offside}>
-      <Tab onClick={toggle}>
+      <Tab onClick={toggle} onMouseEnter={playHoverSound}>
         <IconPadding>
           <MenuIcon fontSize="large" />
         </IconPadding>
@@ -300,20 +324,23 @@ const MenuDrawer: FC = () => {
       </Tab>
       <MenuTabs>
         <MenuTab
-          onClick={() => setActiveTab('topics')}
+          onClick={withClickSound(() => setActiveTab('topics'))}
+          onMouseEnter={playHoverSound}
           active={activeTab === 'topics'}
           top="6px"
         >
           <ChatIcon fontSize="large" />
         </MenuTab>
         <MenuTab
-          onClick={() => setActiveTab('items')}
+          onClick={withClickSound(() => setActiveTab('items'))}
+          onMouseEnter={playHoverSound}
           active={activeTab === 'items'}
         >
           <BusinessCenterIcon fontSize="large" />
         </MenuTab>
         <MenuTab
-          onClick={() => setActiveTab('skills')}
+          onClick={withClickSound(() => setActiveTab('skills'))}
+          onMouseEnter={playHoverSound}
           active={activeTab === 'skills'}
         >
           <AccessibilityNewIcon fontSize="large" />

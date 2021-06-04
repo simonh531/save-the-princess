@@ -48,21 +48,16 @@ export interface Plane {
 
 export interface Location {
   background: string
-  groundLightTexture: string,
-  skyLightTexture: string,
+  groundLightTexture: string
+  skyLightTexture: string
   walls: Plane
   horizontalPlanes: Plane[]
   entities?: Record<string, LocationEntity>
 }
 
-export interface Theme {
-  backgroundColor: string,
-  color: string
-}
-
 export interface Dialogue {
   text: (() => string) | string
-  speaker?: string,
+  speaker?: string
   next?: string
   nextAction?: () => void
   effect?: () => void

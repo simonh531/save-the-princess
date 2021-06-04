@@ -1,10 +1,11 @@
 import {
   FC, useState, useEffect, useRef, SetStateAction, Dispatch,
 } from 'react';
-import styled, { ThemeProvider } from 'styled-components';
+import styled, { ThemeProvider, DefaultTheme } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { gql, useQuery } from '@apollo/client';
-import { Dialogue, Theme } from '../utils/interfaces';
+import { syllable } from 'syllable';
+import { Dialogue } from '../utils/interfaces';
 import Themes from '../styles/characterThemes';
 import Dialogues from '../dialogue';
 import { prevDialogue, setDialogue, unfocus } from '../data/state';
@@ -71,7 +72,8 @@ const Triangle = styled.div`
 
 function isSpeech(speaker: string) {
   if (
-    speaker === 'present'
+    !speaker
+    || speaker === 'present'
     || speaker === 'locations'
   ) {
     return false;
@@ -79,20 +81,45 @@ function isSpeech(speaker: string) {
   return true;
 }
 
-function setEmptyDialogue(text: string, theme: string) {
-  if (isSpeech(theme)) {
-    const line = text.match(/\[(?=.+?\]\(.+?\))|\]\(.+?\)/g);
-    if (line) {
-      return line.join('');
-    }
-  } else {
-    return text;
+function setEmptyDialogue(text: string) {
+  const line = text.match(/\[(?=.+?\]\(.+?\))|\]\(.+?\)/g);
+  if (line) {
+    return line.join('');
   }
   return '';
 }
 
+function processNextChar(text: string, oldText: string, index: number) {
+  let newText = text;
+  let nextIndex = index;
+  let char = oldText.charAt(nextIndex);
+  // fastforward through markdown characters
+  while (char && text.charAt(nextIndex) === char) {
+    nextIndex += 1;
+    char = oldText.charAt(nextIndex);
+  }
+  let asteriskLength = 0;
+  // this will only happen for the first asterisks as the
+  // second set after gets skipped by the first while loop
+  while (char === '*') {
+    nextIndex += 1;
+    char = oldText.charAt(nextIndex);
+    asteriskLength += 1;
+  }
+  if (char) {
+    newText = `${
+      newText.slice(0, nextIndex)}${
+      '*'.repeat(asteriskLength)}${char}${
+      '*'.repeat(asteriskLength)}${
+      newText.slice(nextIndex)
+    }`;
+    nextIndex += 1;
+  }
+  return { newText, char, nextIndex };
+}
+
 const disallowed = ['hr'];
-const speed = 20;
+const speed = 30;
 
 interface Props {
   setAdvance: Dispatch<SetStateAction<() => void>>
@@ -115,7 +142,7 @@ const DialogueBox: FC<Props> = ({
   let dialogue: Dialogue = {
     text: '',
   };
-  let theme: Theme = {
+  let theme: DefaultTheme = {
     backgroundColor: 'transparent',
     color: 'transparent',
   };
@@ -197,38 +224,60 @@ const DialogueBox: FC<Props> = ({
 
   useEffect(() => { // handle text scroll
     let newText = '';
+    let nextNewText = '';
+    let char = '';
+    let nextChar = '';
     const oldText = getText(dialogue.text);
     let start: number;
     let id: number;
     let index = 0;
     let prevTime = -1;
+    let prevSyllableCount = 0;
+    let punctuationDelay = 0;
+    const vowelBlip = new Audio();
+    const consonantBlip = new Audio();
     function animate(timestamp: number) {
       if (start === undefined) {
         start = timestamp;
       }
       // ready for new letter
       if ((timestamp - start) / speed > prevTime) {
-        let char = oldText.charAt(index);
-        // fastforward through markdown characters
-        while (char && newText.charAt(index) === char) {
-          index += 1;
-          char = oldText.charAt(index);
-        }
-        let asteriskLength = 0;
-        // this will only happen for the first asterisks as
-        // the second set gets skipped by the first while loop
-        while (char === '*') {
-          index += 1;
-          char = oldText.charAt(index);
-          asteriskLength += 1;
-        }
+        // have next character ready too so that syllable can make better predictions
+        newText = nextNewText;
+        char = nextChar;
+        const processed = processNextChar(nextNewText, oldText, index);
+        nextNewText = processed.newText;
+        nextChar = processed.char;
+        index = processed.nextIndex;
         if (char) {
-          newText = `${newText.slice(0, index)}${'*'.repeat(asteriskLength)}${char}${'*'.repeat(asteriskLength)}${newText.slice(index)}`;
           if (char !== ' ') { // trailing spaces cause trouble
+            if (/[.?!]/.test(char)) {
+              punctuationDelay = 6;
+            } else if (/,/.test(char)) {
+              punctuationDelay = 3;
+            }
+            if (syllable(nextNewText) > prevSyllableCount) {
+              if (/[aeiouy]/.test(char.toLowerCase())) {
+                try { vowelBlip.pause(); } catch (e) {
+                  // console.log('missed play);
+                }
+                vowelBlip.currentTime = 0;
+                vowelBlip.play();
+              } else {
+                try { consonantBlip.pause(); } catch (e) {
+                  // console.log('missed play);
+                }
+                consonantBlip.currentTime = 0;
+                consonantBlip.play();
+              }
+              prevSyllableCount = syllable(nextNewText);
+            }
             setText(newText);
+            prevTime += 1 + punctuationDelay;
+            punctuationDelay = 0;
+          } else {
+            prevTime += 1;
           }
-          index += 1;
-          prevTime += 1;
         }
       }
       if (oldText.charAt(index) && !endDialogue.current) {
@@ -240,21 +289,28 @@ const DialogueBox: FC<Props> = ({
       }
     }
 
-    setText(newText);
-
     if (isSpeech(keys[0])) {
       if (!wait) { // need to wait or else runs back to back
-        if (dialogueId) {
+        newText = setEmptyDialogue(oldText);
+        const processed = processNextChar(newText, oldText, 0);
+        nextNewText = processed.newText;
+        nextChar = processed.char;
+        index = processed.nextIndex;
+        if (nextChar) {
+          if (theme.vowel && theme.consonant) {
+            vowelBlip.src = theme.vowel;
+            consonantBlip.src = theme.consonant;
+          }
           setIsTalking(true);
-          newText = setEmptyDialogue(oldText, keys[0]);
           id = requestAnimationFrame(animate);
+          return () => cancelAnimationFrame(id);
         }
-        return () => cancelAnimationFrame(id);
+        // runs if immediately completed because only one character
+        setText(dialogue.text);
       }
     } else { // is not speech
       setText(dialogue.text);
     }
-
     return () => { /* do nothing */ };
   }, [dialogueId]);
 
@@ -278,6 +334,7 @@ const DialogueBox: FC<Props> = ({
         </ActionText>
       );
     },
+    img: () => '!',
   };
 
   return (

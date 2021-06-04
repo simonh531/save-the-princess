@@ -53,11 +53,12 @@ const useAnimationLoop = (
             );
           });
         }
-        const { innerHeight, innerWidth } = window;
         if (!focusId()) { // only rotate camera if not focused
           dummyCamera.setRotationFromEuler(new Euler(
-            -Math.PI * (mouseY.current / innerHeight - 0.5) * 0.05,
-            -Math.PI * (mouseX.current / innerWidth - 0.5) * (innerHeight / innerWidth),
+            -Math.PI * (mouseY.current / window.innerHeight - 0.5) * 0.05,
+            -Math.PI
+            * (mouseX.current / window.innerWidth - 0.5)
+            * (window.innerHeight / window.innerWidth),
             0,
             'YXZ',
           ));
@@ -65,17 +66,17 @@ const useAnimationLoop = (
         // handle pointer
         raycaster.current.setFromCamera(
           new Vector2(
-            (mouseX.current / innerWidth) * 2 - 1,
-            (mouseY.current / innerHeight) * -2 + 1,
+            (mouseX.current / window.innerWidth) * 2 - 1,
+            (mouseY.current / window.innerHeight) * -2 + 1,
           ),
           camera,
         );
-        const intersects = raycaster.current.intersectObjects(
+        const intersection = raycaster.current.intersectObjects(
           Object.values(gameEntities)
             .filter((gameEntity) => gameEntity.activate && gameEntity.mesh.visible)
             .map((gameEntity) => gameEntity.mesh),
-        );
-        if (intersects.length) {
+        )[0];
+        if (intersection) {
           // with browser dev tools open doesn't seem to work, but value
           // is actually changed. Probably the check is off with it open?
           // eslint-disable-next-line no-param-reassign
@@ -84,8 +85,8 @@ const useAnimationLoop = (
             activate.current = advanceAction;
           } else {
             activate.current = () => {
-              setFocus(intersects[0].object.name);
-              getAction(gameEntities[intersects[0].object.name].activate)();
+              setFocus(intersection.object.name);
+              getAction(gameEntities[intersection.object.name].activate)();
             };
           }
         } else {

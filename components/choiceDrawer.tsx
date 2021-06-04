@@ -1,6 +1,8 @@
 import { gql, useQuery } from '@apollo/client';
-import { FC, ReactNode } from 'react';
-import styled from 'styled-components';
+import {
+  FC, ReactNode, useEffect, useState,
+} from 'react';
+import styled, { useTheme } from 'styled-components';
 import { Dialogue, StateItem } from '../utils/interfaces';
 import Dialogues from '../dialogue';
 import Topics from '../data/topics';
@@ -58,6 +60,19 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
   }:{
     dialogueId: string, topics:string[], items:StateItem[],
   } = data;
+  const { consonant, vowel } = useTheme();
+  const [playHoverSound, setPlayHoverSound] = useState(() => () => { /* do nothing */ });
+  const [withClickSound, setWithClickSound] = useState(() => (func:() => void) => () => func());
+
+  useEffect(() => {
+    const hover = new Audio(vowel);
+    const click = new Audio(consonant);
+    setPlayHoverSound(() => () => hover.play());
+    setWithClickSound(() => (func:() => void) => () => {
+      click.play();
+      func();
+    });
+  }, []);
 
   const actions:ReactNode[] = [];
   if (dialogueId) {
@@ -78,7 +93,11 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
       if (choice) {
         Object.entries(choice).forEach(([name, action]) => {
           actions.push(
-            <Choice onClick={getAction(action)} key={`choice/${name}`}>
+            <Choice
+              onClick={withClickSound(getAction(action))}
+              onMouseEnter={playHoverSound}
+              key={`choice/${name}`}
+            >
               {name}
             </Choice>,
           );
@@ -88,7 +107,11 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
         topics.forEach((id) => {
           if (topic[id]) {
             actions.push(
-              <Choice onClick={getAction(topic[id])} key={`topic/${id}`}>
+              <Choice
+                onClick={withClickSound(getAction(topic[id]))}
+                onMouseEnter={playHoverSound}
+                key={`topic/${id}`}
+              >
                 &quot;
                 {Topics[id].name}
                 &quot;
@@ -101,7 +124,11 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
         items.forEach(({ id }) => {
           if (item[id]) {
             actions.push(
-              <Choice onClick={getAction(item[id])} key={`item/${id}`}>
+              <Choice
+                onClick={withClickSound(getAction(item[id]))}
+                onMouseEnter={playHoverSound}
+                key={`item/${id}`}
+              >
                 {Items[id].name}
               </Choice>,
             );
