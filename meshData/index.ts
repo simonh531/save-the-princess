@@ -1,12 +1,12 @@
 import testprincess from './testprincess';
 import hyde from './hyde';
 import present from './present';
-import { Entity } from '../utils/interfaces';
+import { MeshData } from '../utils/interfaces';
 
-const entityList:Record<string, Entity> = {
+const meshData:Record<string, MeshData> = {
   testprincess,
   hyde,
   present,
 };
 
-export default entityList;
+export default meshData;

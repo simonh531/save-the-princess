@@ -16,7 +16,7 @@ const USABLE_DIALOGUE = gql`
   }
 `;
 
-const Drawer = styled.div<{ visible: number }>`
+const Drawer = styled.div<{ visible: boolean }>`
   grid-area: rightBottom;
   display: flex;
   flex-direction: column;
@@ -51,7 +51,7 @@ const Choice = styled.div`
   }
 `;
 
-const choiceDrawer: FC = () => {
+const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
   const { loading, /* error, */ data } = useQuery(USABLE_DIALOGUE);
   const {
     dialogueId, topics, items,
@@ -74,12 +74,21 @@ const choiceDrawer: FC = () => {
       } else {
         dialogue = temp;
       }
-      const dialogueTopic = dialogue.topic;
-      if (dialogueTopic) {
+      const { topic, item, choice } = dialogue;
+      if (choice) {
+        Object.entries(choice).forEach(([name, action]) => {
+          actions.push(
+            <Choice onClick={getAction(action)} key={`choice/${name}`}>
+              {name}
+            </Choice>,
+          );
+        });
+      }
+      if (topic) {
         topics.forEach((id) => {
-          if (dialogueTopic[id]) {
+          if (topic[id]) {
             actions.push(
-              <Choice onClick={getAction(dialogueTopic[id])} key={`topic/${id}`}>
+              <Choice onClick={getAction(topic[id])} key={`topic/${id}`}>
                 &quot;
                 {Topics[id].name}
                 &quot;
@@ -88,12 +97,11 @@ const choiceDrawer: FC = () => {
           }
         });
       }
-      const dialogueItem = dialogue.item;
-      if (dialogueItem) {
+      if (item) {
         items.forEach(({ id }) => {
-          if (dialogueItem[id]) {
+          if (item[id]) {
             actions.push(
-              <Choice onClick={getAction(dialogueItem[id])} key={`item/${id}`}>
+              <Choice onClick={getAction(item[id])} key={`item/${id}`}>
                 {Items[id].name}
               </Choice>,
             );
@@ -102,13 +110,11 @@ const choiceDrawer: FC = () => {
       }
     }
   }
-
   if (loading || !data) {
     return null;
   }
-
   return (
-    <Drawer visible={actions.length}>
+    <Drawer visible={!!actions.length && !isTalking}>
       {actions}
     </Drawer>
   );

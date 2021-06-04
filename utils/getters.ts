@@ -7,9 +7,13 @@ export const getText = (text:string | (() => string)):string => {
   return text();
 };
 
-export const getAction = (action:string | (() => void)):() => void => {
-  if (typeof action === 'string') {
-    return () => setDialogue(action);
+export const getAction = (action:string | (() => void) | undefined):() => void => {
+  switch (typeof action) {
+    case 'string':
+      return () => setDialogue(action);
+    case 'function':
+      return action;
+    default:
+      return () => { /* do nothing */ };
   }
-  return action;
 };

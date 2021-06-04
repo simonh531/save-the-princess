@@ -1,5 +1,9 @@
 /* eslint-disable no-param-reassign */
 import {
+  Dispatch, SetStateAction, useEffect, useRef,
+} from 'react';
+import { gql, useQuery } from '@apollo/client';
+import {
   MeshStandardMaterial,
   Mesh,
   BoxGeometry,
@@ -19,17 +23,19 @@ import {
   Camera,
 } from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
-
 import { PNG } from 'pngjs';
 import FastAverageColor from 'fast-average-color';
-
-import { Dispatch, SetStateAction } from 'react';
 import {
-  Location, Plane, Tile, LocationEntity, BackgroundVersions, LookupTable,
-} from './interfaces';
-import colorLookup from './colorLookup';
+  Location, Plane, Tile, LocationEntity, BackgroundVersions, LookupTable, GameEntity,
+} from '../utils/interfaces';
+import colorLookup from '../utils/colorLookup';
+import MeshData from '../meshData';
 
-import Entities from '../entities';
+const LOCATION = gql`
+  query GetGameState {
+    locationId,
+  }
+`;
 
 function average(array:Array<number>) {
   const sum = array.reduce((total, number) => number + total, 0);
@@ -67,19 +73,27 @@ function placeInstanceAtDummy(
   count[id] += 1;
 }
 
+function cleanup(mesh: Mesh) {
+  mesh.geometry.dispose();
+  if (Array.isArray(mesh.material)) {
+    mesh.material.forEach((material) => material.dispose());
+  } else {
+    mesh.material.dispose();
+  }
+  if (mesh.parent) {
+    mesh.parent.remove(mesh);
+  }
+}
+
 // eslint-disable-next-line import/prefer-default-export
-export async function loadLocation(
+const useLoadLocation = async (
   scene: Scene,
   location: Location,
   setCameraDefaultPosition: Dispatch<SetStateAction<Vector3>>,
   camera: PerspectiveCamera,
   dummyCamera: Camera,
   light: DirectionalLight,
-  entityObjects: Object3D[], // objects that face you
-  clickables: Record<string, Object3D>, // objects you can click on
-  activates: Record<string, () => void>, // activate effect
-  cameraAdjustments: Record<string, number[]>, // camera focus position
-  cleanupList: Mesh[],
+  setGameEntities: Dispatch<SetStateAction<Record<string, GameEntity>>>, // objects you can click on
   ambientLight: AmbientLight,
   hemisphereLight: HemisphereLight,
   cubeUnit: number, // possibly moved to location file
@@ -87,12 +101,15 @@ export async function loadLocation(
   lookupTables: Record<string, LookupTable>,
   filteredBackgrounds: Record<string, BackgroundVersions>,
   setFilteredBackgrounds: Dispatch<SetStateAction<Record<string, BackgroundVersions>>>,
-): Promise<void> {
+): Promise<void> => {
+  const { loading, /* error, */ data } = useQuery(LOCATION);
+  const { locationId } = data;
+  const cleanupList = useRef<Mesh[]>([]);
   const cameraPosition = new Vector3();
   const loader = new TextureLoader();
   const dummy = new Object3D();
   const {
-    walls, horizontalPlanes, getEntities, background, groundLightTexture, skyLightTexture,
+    walls, horizontalPlanes, entities, background, groundLightTexture, skyLightTexture,
   } = location;
 
   function filterBackground() {
@@ -138,12 +155,12 @@ export async function loadLocation(
     if (typeof tile === 'object') {
       if (tile.geometry) {
         const svgLoader = new SVGLoader();
-        const data = await Promise.all([
+        const promiseData = await Promise.all([
           svgLoader.loadAsync(tile.geometry),
           loader.loadAsync(tile.url),
         ]);
         let svgResult;
-        [svgResult, wallMap] = data;
+        [svgResult, wallMap] = promiseData;
         const shape = svgResult.paths[0].toShapes(true);
         geometry = new ExtrudeGeometry(shape, {
           depth,
@@ -187,7 +204,7 @@ export async function loadLocation(
     );
     mesh.castShadow = castShadow;
     mesh.receiveShadow = receiveShadow;
-    cleanupList.push(mesh);
+    cleanupList.current.push(mesh);
     scene.add(mesh);
     holder[id] = mesh;
   }
@@ -373,15 +390,16 @@ export async function loadLocation(
     });
   }
 
-  function loadEntities(entityList: Record<string, LocationEntity>): void {
+  async function loadEntities(entityList: Record<string, LocationEntity>): Promise<void> {
+    const gameEntities:Record<string, GameEntity> = {};
     const svgLoader = new SVGLoader();
-    Object.entries(entityList).forEach(async ([id, entity]) => {
-      const entityData = Entities[entity.entityId];
-      const [data, texture] = await Promise.all([
+    await Promise.all(Object.entries(entityList).map(async ([id, entity]) => {
+      const entityData = MeshData[entity.meshId];
+      const [svgData, texture] = await Promise.all([
         svgLoader.loadAsync(entityData.geometry),
         loader.loadAsync(entityData.file),
       ]);
-      const shape = data.paths[0].toShapes(true);
+      const shape = svgData.paths[0].toShapes(true);
       const geometry = new ExtrudeGeometry(shape, { depth, bevelEnabled: false });
       geometry.center();
       let scale = 0;
@@ -405,23 +423,30 @@ export async function loadLocation(
       entityMesh.receiveShadow = true;
       entityMesh.name = id;
       entityMesh.position.set(entity.x * cubeUnit, entityData.height / 2, entity.z * cubeUnit);
+      if (entity.visible) {
+        entityMesh.visible = entity.visible();
+      }
       entityMesh.lookAt(
         cameraPosition.x,
         entityData.height / 2,
         cameraPosition.z,
       );
-      cleanupList.push(entityMesh);
-      entityObjects.push(entityMesh);
-      cameraAdjustments[id] = entityData.cameraAdjustment || [0, 0, 0];
-      if (entity.visible !== false) {
-        scene.add(entityMesh);
-        if (entity.clickable) {
-          clickables[id] = entityMesh;
-          // add activate here because id and entityId can be different and is hard to retrieve
-          activates[id] = entityData.activate;
-        }
-      }
-    });
+      cleanupList.current.push(entityMesh);
+
+      gameEntities[id] = {
+        mesh: entityMesh,
+        activate: entity.activate,
+        cameraAdjustment: entityData.cameraAdjustment,
+        getVisibility: entity.visible,
+        getPosition: () => new Vector3(
+          entity.x * cubeUnit,
+          (entity.y || entityData.height / 2),
+          entity.z * cubeUnit,
+        ),
+      };
+      scene.add(entityMesh);
+    }));
+    setGameEntities(gameEntities);
   }
 
   async function loadAmbientLights(): Promise<void> {
@@ -438,21 +463,41 @@ export async function loadLocation(
     scene.add(ambientLight);
   }
 
-  const done = loadWalls();
-  horizontalPlanes.forEach((plane, index) => {
-    if (index === 0) { // ground plane
-      loadPlane(plane, -depth / 2, cubeUnit, new Euler(-Math.PI / 2, 0, 0), false, true);
-    } else { // ceiling planes
-      loadPlane(
-        plane, cubeUnit * index + depth / 2, cubeUnit, new Euler(Math.PI / 2, 0, 0), true, false,
-      );
-    }
-  });
-  loadAmbientLights();
-  filterBackground();
+  async function loadLocation() {
+    const doneLoadingWalls = loadWalls();
+    horizontalPlanes.forEach((plane, index) => {
+      if (index === 0) { // ground plane
+        loadPlane(plane, -depth / 2, cubeUnit, new Euler(-Math.PI / 2, 0, 0), false, true);
+      } else { // ceiling planes
+        loadPlane(
+          plane, cubeUnit * index + depth / 2, cubeUnit, new Euler(Math.PI / 2, 0, 0), true, false,
+        );
+      }
+    });
+    loadAmbientLights();
+    filterBackground();
 
-  await done; // do this so that entities can face the camera
-  if (getEntities) {
-    loadEntities(getEntities());
+    await doneLoadingWalls; // do this so that entities can face the camera
+    if (entities) {
+      loadEntities(entities);
+    }
   }
-}
+
+  useEffect(() => {
+    if (!loading && locationId && Object.keys(lookupTables).length) {
+      loadLocation();
+      return () => {
+        while (cleanupList.current.length) {
+          const next = cleanupList.current.shift();
+          if (next) {
+            cleanup(next);
+          }
+        }
+        setGameEntities({});
+      };
+    }
+    return () => { /* do nothing */ };
+  }, [loading, locationId, lookupTables]);
+};
+
+export default useLoadLocation;

@@ -35,39 +35,39 @@ const test:Location = {
       },
     },
   ],
-  getEntities: () => ({
-    princess: {
-      entityId: 'testprincess',
-      x: 1.9,
-      z: 1.5,
-      clickable: true,
-    },
+  entities: {
     princess1: {
-      entityId: 'testprincess',
+      meshId: 'testprincess',
       x: 1,
       z: 3.5,
-      clickable: true,
+      activate: 'testprincess/tutorial',
+    },
+    princess: {
+      meshId: 'testprincess',
+      x: 1.9,
+      z: 1.5,
+      activate: 'testprincess/birthdayPout',
     },
     princess2: {
-      entityId: 'testprincess',
+      meshId: 'testprincess',
       x: 3,
       z: 3.5,
-      clickable: true,
+      activate: 'testprincess/changeTime',
     },
     hyde: {
-      entityId: 'hyde',
+      meshId: 'hyde',
       x: 2.4,
       z: 3,
-      clickable: true,
+      activate: 'hyde/intro',
     },
     present: {
-      entityId: 'present',
+      meshId: 'present',
       x: 1.5,
       z: 3,
-      clickable: true,
-      visible: !checks().presentTaken,
+      activate: 'present/pickup',
+      visible: () => !checks().presentTaken,
     },
-  }),
+  },
 };
 
 export default test;

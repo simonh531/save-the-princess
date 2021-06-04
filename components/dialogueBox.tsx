@@ -34,9 +34,10 @@ const Box = styled.div<{ visible: string }>`
   transition: 0.4s opacity${(props) => (props.visible ? '' : ', background-color 0s 0.4s')};
 `; // turn on the transition for when it's on its way out
 
-const TextBox = styled.div`
+const TextBox = styled.div<{clickThrough: boolean}>`
   flex: 1;
   font-size: 1.4em;
+  pointer-events: ${(props) => (props.clickThrough ? 'none' : 'auto')};
 `;
 
 const ActionText = styled.span`
@@ -52,9 +53,10 @@ const ContinueBox = styled.div`
   text-align: right;
   font-size: 1.2em;
   cursor: pointer;
+  user-select: none;
 
   :hover {
-    opacity: 0.8
+    opacity: 0.7
   }
 `;
 
@@ -95,13 +97,14 @@ const speed = 20;
 interface Props {
   setAdvance: Dispatch<SetStateAction<() => void>>
   advance: () => void
+  setIsTalking: Dispatch<SetStateAction<boolean>>
+  isTalking: boolean
 }
 const DialogueBox: FC<Props> = ({
-  setAdvance, advance,
+  setAdvance, advance, setIsTalking, isTalking,
 }) => {
   const { loading, /* error, */ data } = useQuery(DIALOGUE);
   const endDialogue = useRef(false);
-  const [isTalking, setIsTalking] = useState(false);
   const [text, setText] = useState('');
   const { dialogueId, checks } = data;
 
@@ -264,7 +267,9 @@ const DialogueBox: FC<Props> = ({
     a(props: any) { // this type is broken
       const { children, href } = props;
       let action = () => { /* do nothing */ };
-      if (dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
+      if (isTalking) {
+        action = advance;
+      } else if (dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
         action = getAction(dialogue.actions[parseInt(href, 10)]);
       }
       return (
@@ -277,10 +282,10 @@ const DialogueBox: FC<Props> = ({
 
   return (
     <ThemeProvider theme={theme}>
-      <Box visible={dialogueId}>
+      <Box visible={dialogueId} onClick={isTalking ? advance : () => { /* do nothing */ }}>
         {isSpeech(keys[0]) && checks.identity !== dialogue.speaker
         && <Triangle />}
-        <TextBox onClick={isTalking ? advance : () => { /* do nothing */ }}>
+        <TextBox clickThrough={isTalking || !dialogueId}>
           <ReactMarkdown components={components} disallowedElements={disallowed}>
             {text}
           </ReactMarkdown>

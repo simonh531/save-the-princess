@@ -1,3 +1,5 @@
+import { Object3D, Vector3 } from 'three';
+
 export interface WindowSize {
   width: number | undefined
   height: number | undefined
@@ -8,20 +10,28 @@ export interface MousePosition {
   mouseY: number | undefined
 }
 
-export interface Entity {
+export interface MeshData {
   file: string
   geometry: string
   height: number
   cameraAdjustment?: number[]
-  activate: () => void
 }
 
 export interface LocationEntity {
-  entityId: string
+  meshId: string
   x: number
+  y?: number
   z: number
-  clickable: boolean
-  visible?: boolean
+  activate?: string | (() => void)
+  visible?: () => boolean
+}
+
+export interface GameEntity {
+  mesh: Object3D
+  getPosition: () => Vector3
+  activate?: string | (() => void)
+  getVisibility?: () => boolean
+  cameraAdjustment?: number[]
 }
 
 export interface Tile {
@@ -42,7 +52,7 @@ export interface Location {
   skyLightTexture: string,
   walls: Plane
   horizontalPlanes: Plane[]
-  getEntities?: () => Record<string, LocationEntity>
+  entities?: Record<string, LocationEntity>
 }
 
 export interface Theme {
@@ -57,6 +67,7 @@ export interface Dialogue {
   nextAction?: () => void
   effect?: () => void
   actions?: Array<(() => void) | string>
+  choice?: Record<string, (() => void) | string>
   topic?: Record<string, (() => void) | string>
   item?: Record<string, (() => void) | string>
 }

@@ -4,11 +4,13 @@ import { setCheck } from '../data/checks';
 
 // eslint-disable-next-line import/prefer-default-export
 export const pickup:Dialogue = {
-  text: 'This looks like a good present',
-  next: '',
-  nextAction: () => {
-    addItem('present');
-    setCheck('presentTaken', true);
-    unfocus();
+  text: 'This looks like a good present. Do you want to take it?',
+  choice: {
+    Yes: () => {
+      addItem('present');
+      setCheck('presentTaken', true);
+      unfocus();
+    },
+    No: unfocus,
   },
 };

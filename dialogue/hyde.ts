@@ -1,5 +1,5 @@
 import { Dialogue } from '../utils/interfaces';
-import { addTopic } from '../data/state';
+import { addTopic, unfocus } from '../data/state';
 
 export const intro:Dialogue[] = [
   {
@@ -26,6 +26,9 @@ export const intro:Dialogue[] = [
   }, {
     speaker: 'kalvin',
     text: '*I blushed in response. Normally I would have put up some excuse or protest, but Hyde knew me too well. Instead, I pouted and rolled my eyes.*',
+    choice: {
+      'Leave embarassingly': unfocus,
+    },
   }, {
     text: "Well, I guess it's not all good news. It's quite the tragedy that her mother, Queen Marianne had passed in such fashion. I can't begin to imagine what Fidelia is going through right now. But for them to hold the Coronation festival so promptly tells me that they have a strong heart to move on.",
     next: '',

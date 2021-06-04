@@ -7,32 +7,29 @@ import {
   PerspectiveCamera,
   WebGLRenderer,
   WebGLCubeRenderTarget,
-  Raycaster,
-  Vector2,
-  Euler,
   Camera,
   Vector3,
   DirectionalLight,
   HemisphereLight,
   AmbientLight,
   CanvasTexture,
-  Mesh,
-  Object3D,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
-import RoomIcon from '@material-ui/icons/Room';
-
-import { setDialogue, setFocus } from '../../data/state';
-import { useWindowSize, useMousePositionEffect } from '../../utils/hooks';
-import { BackgroundVersions, Location, LookupTable } from '../../utils/interfaces';
-import { loadLocation } from '../../utils/loaders';
+import { useWindowSize } from '../../utils/hooks';
+import {
+  BackgroundVersions, GameEntity, Location, LookupTable,
+} from '../../utils/interfaces';
+import useLoadLocation from '../../render/useLoadLocation';
 import { makeLookupTable } from '../../utils/colorLookup';
 import Locations from '../../locations';
+
+import useAnimationLoop from '../../render/useAnimationLoop';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
 import MenuDrawer from '../../components/menuDrawer';
 import ChoiceDrawer from '../../components/choiceDrawer';
+import LocationDialogueButton from '../../components/locationDialogueButton';
 
 const GAME_STATE = gql`
   query GetGameState {
@@ -50,30 +47,6 @@ const GameArea = styled.main`
   overflow:hidden;
 `;
 
-const LocationDialogueButton = styled.div<{visible: boolean}>`
-  height: 60px;
-  width: 60px;
-  position: absolute;
-  left: calc(50% - 24px);
-  bottom: 18px;
-  background-color: white;
-  border: 0;
-  border-radius: 50%;
-  cursor: pointer;
-  pointer-events: ${(props) => (props.visible ? 'auto' : 'none')};
-  opacity: ${(props) => (props.visible ? '0.95' : '0')};
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.4s;
-  font-size: 2.8em;
-
-  :hover {
-    background-color: ${(props) => props.theme.backgroundColor};
-    color: ${(props) => props.theme.color};
-  }
-`;
-
 const defaultAction = () => () => { /* do nothing */ };
 
 const defaultLocation:Location = {
@@ -87,30 +60,16 @@ const defaultLocation:Location = {
   horizontalPlanes: [],
 };
 
-function cleanup(mesh: Mesh) {
-  mesh.geometry.dispose();
-  if (Array.isArray(mesh.material)) {
-    mesh.material.forEach((material) => material.dispose());
-  } else {
-    mesh.material.dispose();
-  }
-  if (mesh.parent) {
-    mesh.parent.remove(mesh);
-  }
-}
-
 // units are meters let's say
 const depth = 0.1;
 const cubeUnit = 3;
 
 const Game: FC = () => {
   const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
-
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
-
   let location:Location = defaultLocation;
   const {
-    dialogueId, focusId, locationId, time, checks,
+    focusId, locationId, time, checks,
   } = data;
 
   if (locationId && Locations[locationId]) {
@@ -121,17 +80,11 @@ const Game: FC = () => {
   const [cameraDefaultPosition, setCameraDefaultPosition] = useState(new Vector3());
   const camera = useRef(new PerspectiveCamera());
   const dummyCamera = useRef(new Camera());
-  const entities = useRef<Object3D[]>([]);
-  const clickables = useRef<Record<string, Object3D>>({});
-  const cleanupList = useRef<Mesh[]>([]);
-  // eslint-disable-next-line comma-spacing
-  const activates = useRef<Record<string,() => void>>({});
-  const cameraAdjustments = useRef<Record<string, number[]>>({});
+  const [gameEntities, setGameEntities] = useState<Record<string, GameEntity>>({});
   const ambientLight = useRef(new AmbientLight(0xffffff, 0));
   const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
   const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
-  const animationFrameId = useRef(0);
 
   // need to update
   const [renderer, setRenderer] = useState<WebGLRenderer>();
@@ -146,6 +99,8 @@ const Game: FC = () => {
   const target = useRef<HTMLDivElement | null>(null);
 
   const { width, height } = useWindowSize();
+
+  const [isTalking, setIsTalking] = useState(false);
 
   useEffect(() => { // write lookup table
     async function makeLookupTables() {
@@ -181,42 +136,22 @@ const Game: FC = () => {
     scene.current.background = backgroundRenderTarget.current.texture;
   }, []);
 
-  useEffect(() => {
-    if (locationId && Object.keys(lookupTables).length) {
-      loadLocation(
-        scene.current,
-        location,
-        setCameraDefaultPosition,
-        camera.current,
-        dummyCamera.current,
-        directionalLight.current,
-        entities.current,
-        clickables.current,
-        activates.current,
-        cameraAdjustments.current,
-        cleanupList.current,
-        ambientLight.current,
-        hemisphereLight.current,
-        cubeUnit,
-        depth,
-        lookupTables,
-        filteredBackgrounds,
-        setFilteredBackgrounds,
-      );
-    }
-
-    return () => {
-      while (cleanupList.current.length) {
-        const next = cleanupList.current.shift();
-        if (next) {
-          cleanup(next);
-        }
-      }
-      entities.current = [];
-      clickables.current = {};
-      activates.current = {};
-    };
-  }, [locationId, Object.keys(lookupTables).length]);
+  useLoadLocation(
+    scene.current,
+    location,
+    setCameraDefaultPosition,
+    camera.current,
+    dummyCamera.current,
+    directionalLight.current,
+    setGameEntities,
+    ambientLight.current,
+    hemisphereLight.current,
+    cubeUnit,
+    depth,
+    lookupTables,
+    filteredBackgrounds,
+    setFilteredBackgrounds,
+  );
 
   useEffect(() => { // handle sun/moon position/strength
     const dayTime = time % 24;
@@ -315,67 +250,6 @@ const Game: FC = () => {
     }
   }, [width, height]);
 
-  useMousePositionEffect((mouseX, mouseY) => { // mouse move event
-    const raycaster = new Raycaster();
-    if (height && width && mouseX && mouseY) {
-      if (!focusId) {
-        dummyCamera.current.setRotationFromEuler(new Euler(
-          -Math.PI * (mouseY / height - 0.5) * 0.05,
-          -Math.PI * (mouseX / width - 0.5) * (height / width),
-          0,
-          'YXZ',
-        ));
-      }
-      raycaster.setFromCamera(
-        new Vector2(
-          (mouseX / width) * 2 - 1,
-          (mouseY / height) * -2 + 1,
-        ),
-        camera.current,
-      );
-      const intersects = raycaster.intersectObjects(Object.values(clickables.current));
-      if (renderer) {
-        if (intersects.length) {
-          renderer.domElement.style.cursor = 'pointer';
-        } else {
-          renderer.domElement.style.cursor = 'default';
-        }
-      }
-    }
-  }, [width, height, focusId]);
-
-  useEffect(() => { // mouse click event
-    const raycaster = new Raycaster();
-    function click(event:MouseEvent) {
-      if (width && height) {
-        raycaster.setFromCamera(
-          new Vector2(
-            (event.clientX / width) * 2 - 1,
-            (event.clientY / height) * -2 + 1,
-          ),
-          camera.current,
-        );
-        const intersects = raycaster.intersectObjects(Object.values(clickables.current));
-        if (intersects.length) {
-          if (focusId) {
-            advanceAction();
-          } else {
-            setFocus(intersects[0].object.name);
-            activates.current[intersects[0].object.name]();
-          }
-        }
-      }
-    }
-    if (renderer) {
-      renderer.domElement.addEventListener('click', click);
-    }
-    return () => {
-      if (renderer) {
-        renderer.domElement.removeEventListener('click', click);
-      }
-    };
-  }, [width, height, focusId, advanceAction]);
-
   useEffect(() => { // handle keyboard
     function handleKeydown(event:KeyboardEvent) {
       // console.log(event);
@@ -398,10 +272,11 @@ const Game: FC = () => {
   }, [advanceAction]);
 
   useEffect(() => { // handle camera movement on focus change
-    if (focusId && clickables.current[focusId]) { // second part necessary for refresh
-      const focusPosition = clickables.current[focusId].position.clone();
-      if (cameraAdjustments.current[focusId]) {
-        focusPosition.add(new Vector3(...cameraAdjustments.current[focusId]));
+    if (focusId && gameEntities[focusId]) { // second part necessary for refresh
+      const { cameraAdjustment, mesh } = gameEntities[focusId];
+      const focusPosition = mesh.position.clone();
+      if (cameraAdjustment) {
+        focusPosition.add(new Vector3(...cameraAdjustment));
       }
       // math
       const destination = cameraDefaultPosition.clone()
@@ -414,59 +289,27 @@ const Game: FC = () => {
     } else {
       dummyCamera.current.position.copy(cameraDefaultPosition);
     }
-  }, [focusId, cameraDefaultPosition]);
+  }, [focusId, cameraDefaultPosition, gameEntities]);
 
   // update entities based on checks
   useEffect(() => {
-    if (locationId && location && location.getEntities) {
-      const entityValues = location.getEntities();
-      entities.current.forEach((entity) => {
-        if (entityValues[entity.name]) {
-          const { x, z, visible } = entityValues[entity.name];
-          entity.position.setX(x * cubeUnit);
-          entity.position.setZ(z * cubeUnit);
-          if (visible === false) {
-            scene.current.remove(entity);
-            delete clickables.current[entity.name];
-          } else {
-            scene.current.add(entity);
-            clickables.current[entity.name] = entity;
-          }
-        }
-      });
-    }
-  }, [checks, locationId]);
-
-  useEffect(() => { // animation loop
-    const prevPosition = new Vector3();
-    function animate() {
-      if (renderer) {
-        camera.current.quaternion.slerp(dummyCamera.current.quaternion, 0.05);
-        camera.current.position.lerp(dummyCamera.current.position, 0.05);
-        if ( // only change where entities are facing if moving
-          Math.abs(camera.current.position.x - prevPosition.x) > 0.001
-          || Math.abs(camera.current.position.y - prevPosition.y) > 0.001
-          || Math.abs(camera.current.position.z - prevPosition.z) > 0.001
-        ) {
-          entities.current.forEach((entity) => {
-            entity.lookAt(
-              camera.current.position.x,
-              entity.position.y, // keep parallel with ground
-              camera.current.position.z,
-            );
-          });
-        }
-        renderer.render(scene.current, camera.current);
-        prevPosition.copy(camera.current.position);
+    Object.values(gameEntities).forEach((entity) => {
+      if (entity.getVisibility) {
+        // eslint-disable-next-line no-param-reassign
+        entity.mesh.visible = entity.getVisibility();
       }
-      animationFrameId.current = requestAnimationFrame(animate);
-    }
-    if (renderer) {
-      animationFrameId.current = requestAnimationFrame(animate);
-    }
+      entity.mesh.position.copy(entity.getPosition());
+    });
+  }, [checks]);
 
-    return () => cancelAnimationFrame(animationFrameId.current);
-  }, [renderer]);
+  useAnimationLoop(
+    renderer,
+    scene.current,
+    camera.current,
+    dummyCamera.current,
+    gameEntities,
+    advanceAction,
+  );
 
   if (loading || !data) {
     return null;
@@ -479,12 +322,12 @@ const Game: FC = () => {
         <DialogueBox
           setAdvance={setAdvanceAction}
           advance={advanceAction}
+          setIsTalking={setIsTalking}
+          isTalking={isTalking}
         />
         <MenuDrawer />
-        <ChoiceDrawer />
-        <LocationDialogueButton visible={!dialogueId} onClick={() => setDialogue(`locations/${locationId}`)}>
-          <RoomIcon fontSize="inherit" />
-        </LocationDialogueButton>
+        <ChoiceDrawer isTalking={isTalking} />
+        <LocationDialogueButton />
       </GameGrid>
     </GameArea>
   );

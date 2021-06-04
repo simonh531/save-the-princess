@@ -67,7 +67,7 @@ const IconPadding = styled.div`
 `;
 
 const MenuTabs = styled.div`
-  padding: 6px 0;
+  padding: 4px 0;
   display: flex;
   justify-content: space-evenly;
 `;
