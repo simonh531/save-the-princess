@@ -4,26 +4,57 @@ import {
 } from '../data/state';
 
 export const tutorial0:Dialogue = {
-  text: "Hey y'all! It's center princess's [birthday](0)!",
+  text: "Finally awake [Kalvin](0)? I haven't seen you *sleep so peacefully in a while*. We should be arriving at the Fidelia Castle in just a few hours.",
   next: 'testprincess/tutorial1',
   actions: [
     ():void => {
-      setDialogue('testprincess/birthdayReproach');
+      addTopic('kalvin');
     },
   ],
   item: {
     fakeCake: () => setDialogue('testprincess/killMe'),
   },
+  topic: {
+    kalvin: () => setDialogue('testprincess/kalvin')
+  }
 };
+export const kalvin:Dialogue = {
+  text: "I've known you since you were but a little kid. Your father couldn't find you a tutor that could deal with your antics until I came along.",
+  next: ''
+}
 
 export const tutorial1:Dialogue = {
-  text: "She's been kind of pouty recently...",
-  next: '',
+  text: "Are you excited? It's been quite a while since you last saw *Princess Annette*. Soon to be Queen Annette that is.",
+  next: 'testprincess/tutorial2',
   item: {
     fakeCake: () => setDialogue('testprincess/killMe'),
   },
+  topic: {
+    kalvin: () => setDialogue('testprincess/kalvin')
+  }
 };
+export const tutorial2:Dialogue = {
+  text: " I remember how smitten you were all those years ago. While you have the habit of running your mouth at even the slightest gust of air, she somehow managed to take your breath away.",
+  next: 'testprincess/tutorial3',
+  topic: {
+    kalvin: () => setDialogue('testprincess/kalvin')
+  }
+}
 
+export const tutorial3:Dialogue = {
+  text:"*I blushed in response. Normally I would have put up some excuse or protest, but Hyde knew me too well. Instead, I pouted and rolled my eyes.*" ,
+  next: 'testprincess/tutorial4',
+  topic: {
+    kalvin: () => setDialogue('testprincess/kalvin')
+  }
+}
+export const tutorial4:Dialogue = {
+ text:"Well, I guess it's not all good news. It's quite the tragedy that her mother, Queen Marianne had passed in such fashion. I can't begin to imagine what Fidelia is going through right now. But for them to hold the Coronation festival so promptly tells me that they have a strong heart to move on." ,
+  next: '',
+  topic: {
+    kalvin: () => setDialogue('testprincess/kalvin')
+  }
+}
 export const birthdayReproach:Dialogue = {
   text: "Ohohoho, you didn't know? You really ought to make amends and say *something* to her **>:)**",
   next: '',

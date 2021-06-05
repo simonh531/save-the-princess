@@ -23,7 +23,7 @@ const Box = styled.div<{ visible: string, extra: string }>`
 
 const TextBox = styled.div`
   flex: 1;
-  font-size: 1.6em;
+  font-size: 1.4em;
 `;
 
 const ActionText = styled.span`

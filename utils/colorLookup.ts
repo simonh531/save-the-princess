@@ -119,7 +119,7 @@ export const makeLookupTable = async (url: string):Promise<LookupTable> => {
   let indices;
   if (extension === 'CUBE') {
     dimension = parseInt(
-      textLines[5].match(/\d+$/g)?.toString() || '0', 10,
+      textLines[5].split(' ')[1], 10,
     );
     padding = 12;
     multiplier = 255;

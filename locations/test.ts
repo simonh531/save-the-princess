@@ -52,6 +52,12 @@ const test:Location = {
       z: 3.5,
       clickable: true,
     },
+    princess3: {
+      entityId: 'testprincess',
+      x: 2,
+      z: 3,
+      clickable: true,
+    },
   },
 };
 
