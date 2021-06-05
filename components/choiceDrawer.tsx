@@ -6,7 +6,7 @@ import Dialogues from '../dialogue';
 import Topics from '../data/topics';
 import Items from '../data/items';
 import { getAction } from '../utils/getters';
-import { useThemeSounds } from '../utils/hooks';
+// import { useThemeSounds } from '../utils/hooks';
 
 const USABLE_DIALOGUE = gql`
   query GetChecks {
@@ -59,7 +59,7 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
   }:{
     dialogueId: string, topics:string[], items:StateItem[],
   } = data;
-  const { playHoverSound, withClickSound } = useThemeSounds();
+  // const { playHoverSound, withClickSound } = useThemeSounds();
 
   const actions:ReactNode[] = [];
   if (dialogueId) {
@@ -81,8 +81,12 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
         Object.entries(choice).forEach(([name, action]) => {
           actions.push(
             <Choice
-              onClick={withClickSound(getAction(action))}
-              onMouseEnter={playHoverSound}
+              onClick={
+                // withClickSound(
+                  getAction(action)
+                // )
+              }
+              // onMouseEnter={playHoverSound}
               key={`choice/${name}`}
             >
               {name}
@@ -95,8 +99,12 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
           if (topic[id]) {
             actions.push(
               <Choice
-                onClick={withClickSound(getAction(topic[id]))}
-                onMouseEnter={playHoverSound}
+                onClick={
+                  // withClickSound(
+                    getAction(topic[id])
+                  // )
+                }
+                // onMouseEnter={playHoverSound}
                 key={`topic/${id}`}
               >
                 &quot;
@@ -112,8 +120,12 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
           if (item[id]) {
             actions.push(
               <Choice
-                onClick={withClickSound(getAction(item[id]))}
-                onMouseEnter={playHoverSound}
+                onClick={
+                  // withClickSound(
+                    getAction(item[id])
+                  // )
+                }
+                // onMouseEnter={playHoverSound}
                 key={`item/${id}`}
               >
                 {Items[id].name}

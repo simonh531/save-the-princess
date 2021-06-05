@@ -2,7 +2,10 @@ import { FC, useState, useRef } from 'react';
 import styled from 'styled-components';
 import { gql, useQuery } from '@apollo/client';
 import RoomIcon from '@material-ui/icons/Room';
-import { useMouseAndWindowSizeEffect, useThemeSounds } from '../utils/hooks';
+import {
+  useMouseAndWindowSizeEffect,
+  // useThemeSounds
+} from '../utils/hooks';
 import { setDialogue } from '../data/state';
 
 const DIALOGUE_LOCATION = gql`
@@ -41,7 +44,7 @@ const locationDialogueButton:FC = () => {
   const { dialogueId, locationId } = data;
   const [near, setNear] = useState(false);
   const button = useRef<HTMLDivElement | null>(null);
-  const { playHoverSound, withClickSound } = useThemeSounds();
+  // const { playHoverSound, withClickSound } = useThemeSounds();
   useMouseAndWindowSizeEffect((mouseX, mouseY, screenX, screenY) => {
     if (button.current && mouseX !== undefined && mouseY !== undefined && screenX && screenY) {
       const mouseXRatio = (mouseX / screenX - 0.5) / 0.5;
@@ -62,8 +65,12 @@ const locationDialogueButton:FC = () => {
   return (
     <LocationDialogueButton
       visible={!dialogueId && near}
-      onClick={withClickSound(() => setDialogue(`locations/${locationId}`))}
-      onMouseEnter={playHoverSound}
+      onClick={
+        // withClickSound(
+          () => setDialogue(`locations/${locationId}`)
+        // )
+      }
+      // onMouseEnter={playHoverSound}
       ref={button}
     >
       <RoomIcon fontSize="inherit" />

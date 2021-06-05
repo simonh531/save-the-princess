@@ -168,9 +168,13 @@ const MenuDrawer: FC = () => {
   const itemSound = useRef<HTMLAudioElement>();
   const topicSound = useRef<HTMLAudioElement[]>([]);
   // const [notification, setNotification] = useState(false);
-  const { playHoverSound, withClickSound } = useThemeSounds();
+  const {
+    // playHoverSound,
+    withClickSound,
+  } = useThemeSounds();
 
-  const toggle = withClickSound(() => setOffside(!offside));
+  // const toggle = withClickSound(() => setOffside(!offside));
+  const toggle = () => setOffside(!offside);
   const { topics, items, checks } = data;
 
   useEffect(() => {
@@ -208,8 +212,12 @@ const MenuDrawer: FC = () => {
     listing = topics.map((id: string) => (
       <ListItem
         key={id}
-        onClick={withClickSound(() => setInfoId(`topic/${id}}`))}
-        onMouseEnter={playHoverSound}
+        onClick={
+          // withClickSound(
+            () => setInfoId(`topic/${id}}`)
+          // )
+        }
+        // onMouseEnter={playHoverSound}
         active={infoId === `topic/${id}`}
       >
         {Topics[id].name}
@@ -219,8 +227,12 @@ const MenuDrawer: FC = () => {
     listing = items.map((item: StateItem) => (
       <ListItem
         key={item.id}
-        onClick={withClickSound(() => setInfoId(`item/${item.id}`))}
-        onMouseEnter={playHoverSound}
+        onClick={
+          // withClickSound(
+            () => setInfoId(`item/${item.id}`)
+          // )
+        }
+        // onMouseEnter={playHoverSound}
         active={infoId === `item/${item.id}`}
       >
         {Items[item.id].name}
@@ -311,8 +323,12 @@ const MenuDrawer: FC = () => {
       const { children, href } = props;
       return (
         <ActionText
-          onClick={withClickSound(getAction(actionList[parseInt(href, 10)]))}
-          onMouseEnter={playHoverSound}
+          onClick={
+            // withClickSound(
+              getAction(actionList[parseInt(href, 10)])
+            // )
+          }
+          // onMouseEnter={playHoverSound}
         >
           {children}
         </ActionText>
@@ -327,7 +343,10 @@ const MenuDrawer: FC = () => {
 
   return (
     <Drawer offside={offside}>
-      <Tab onClick={toggle} onMouseEnter={playHoverSound}>
+      <Tab
+        onClick={toggle}
+        // onMouseEnter={playHoverSound}
+      >
         <IconPadding>
           <MenuIcon fontSize="large" />
         </IconPadding>
@@ -335,23 +354,35 @@ const MenuDrawer: FC = () => {
       </Tab>
       <MenuTabs>
         <MenuTab
-          onClick={withClickSound(() => setActiveTab('topics'))}
-          onMouseEnter={playHoverSound}
+          onClick={
+            // withClickSound(
+              () => setActiveTab('topics')
+            // )
+          }
+          // onMouseEnter={playHoverSound}
           active={activeTab === 'topics'}
           top="6px"
         >
           <ChatIcon fontSize="large" />
         </MenuTab>
         <MenuTab
-          onClick={withClickSound(() => setActiveTab('items'))}
-          onMouseEnter={playHoverSound}
+          onClick={
+            // withClickSound(
+              () => setActiveTab('items')
+            // )
+          }
+          // onMouseEnter={playHoverSound}
           active={activeTab === 'items'}
         >
           <BusinessCenterIcon fontSize="large" />
         </MenuTab>
         <MenuTab
-          onClick={withClickSound(() => setActiveTab('skills'))}
-          onMouseEnter={playHoverSound}
+          onClick={
+            // withClickSound(
+              () => setActiveTab('skills')
+            // )
+          }
+          // onMouseEnter={playHoverSound}
           active={activeTab === 'skills'}
         >
           <AccessibilityNewIcon fontSize="large" />
