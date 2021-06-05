@@ -258,17 +258,21 @@ const DialogueBox: FC<Props> = ({
             }
             if (syllable(nextNewText) > prevSyllableCount) {
               if (/[aeiouy]/.test(char.toLowerCase())) {
-                try { vowelBlip.pause(); } catch (e) {
-                  // console.log('missed play);
+                try {
+                  vowelBlip.pause();
+                  vowelBlip.currentTime = 0;
+                  vowelBlip.play();
+                } catch (e) {
+                  // console.log(e);
                 }
-                vowelBlip.currentTime = 0;
-                vowelBlip.play();
               } else {
-                try { consonantBlip.pause(); } catch (e) {
-                  // console.log('missed play);
+                try {
+                  consonantBlip.pause();
+                  consonantBlip.currentTime = 0;
+                  consonantBlip.play();
+                } catch (e) {
+                  // console.log(e);
                 }
-                consonantBlip.currentTime = 0;
-                consonantBlip.play();
               }
               prevSyllableCount = syllable(nextNewText);
             }

@@ -1,13 +1,12 @@
 import { gql, useQuery } from '@apollo/client';
-import {
-  FC, ReactNode, useEffect, useState,
-} from 'react';
-import styled, { useTheme } from 'styled-components';
+import { FC, ReactNode } from 'react';
+import styled from 'styled-components';
 import { Dialogue, StateItem } from '../utils/interfaces';
 import Dialogues from '../dialogue';
 import Topics from '../data/topics';
 import Items from '../data/items';
 import { getAction } from '../utils/getters';
+import { useThemeSounds } from '../utils/hooks';
 
 const USABLE_DIALOGUE = gql`
   query GetChecks {
@@ -60,19 +59,7 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
   }:{
     dialogueId: string, topics:string[], items:StateItem[],
   } = data;
-  const { consonant, vowel } = useTheme();
-  const [playHoverSound, setPlayHoverSound] = useState(() => () => { /* do nothing */ });
-  const [withClickSound, setWithClickSound] = useState(() => (func:() => void) => () => func());
-
-  useEffect(() => {
-    const hover = new Audio(vowel);
-    const click = new Audio(consonant);
-    setPlayHoverSound(() => () => hover.play());
-    setWithClickSound(() => (func:() => void) => () => {
-      click.play();
-      func();
-    });
-  }, []);
+  const { playHoverSound, withClickSound } = useThemeSounds();
 
   const actions:ReactNode[] = [];
   if (dialogueId) {

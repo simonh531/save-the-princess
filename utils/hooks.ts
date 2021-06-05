@@ -1,6 +1,7 @@
 import {
   useState, useEffect, useRef, DependencyList,
 } from 'react';
+import { useTheme } from 'styled-components';
 import { WindowSize } from './interfaces';
 
 export function useWindowSize():WindowSize {
@@ -29,10 +30,24 @@ export function useWindowSize():WindowSize {
   return windowSize;
 }
 
+export function useWindowSizeEffect(
+  // eslint-disable-next-line no-unused-vars
+  func: (x: number, y: number) => void,
+  deps?: DependencyList,
+):void {
+  function handleResize() {
+    func(window.innerWidth, window.innerHeight);
+  }
+  useEffect(() => {
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, deps);
+}
+
 export function useMousePositionEffect(
   // eslint-disable-next-line no-unused-vars
   func: (x: number, y: number) => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deps?: DependencyList,
 ): void {
   const lastMouseX = useRef<number>();
@@ -57,7 +72,6 @@ export function useMousePositionEffect(
 export function useMouseAndWindowSizeEffect(
   // eslint-disable-next-line no-unused-vars
   func: (x?: number, y?: number, screenX?: number, screenY?: number) => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deps?: DependencyList,
 ): void {
   const lastMouseX = useRef<number>();
@@ -101,4 +115,26 @@ export function useMouseAndWindowSizeEffect(
       window.removeEventListener('resize', handleResize);
     };
   }, deps);
+}
+
+export function useThemeSounds():{
+  playHoverSound: () => void
+  // eslint-disable-next-line no-unused-vars
+  withClickSound: (func: () => void) => () => void
+  } {
+  const { consonant, vowel } = useTheme();
+  const [playHoverSound, setPlayHoverSound] = useState(() => () => { /* do nothing */ });
+  const [withClickSound, setWithClickSound] = useState(() => (func:() => void) => () => func());
+
+  useEffect(() => {
+    const hover = new Audio(vowel);
+    const click = new Audio(consonant);
+    setPlayHoverSound(() => () => hover.play());
+    setWithClickSound(() => (func:() => void) => () => {
+      click.play();
+      func();
+    });
+  }, [consonant, vowel]);
+
+  return { playHoverSound, withClickSound };
 }

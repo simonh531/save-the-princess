@@ -15,14 +15,14 @@ import {
   CanvasTexture,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
-import { useWindowSize } from '../../utils/hooks';
+import { useWindowSizeEffect } from '../../utils/hooks';
 import {
   BackgroundVersions, GameEntity, Location, LookupTable,
 } from '../../utils/interfaces';
-import useLoadLocation from '../../render/useLoadLocation';
 import { makeLookupTable } from '../../utils/colorLookup';
 import Locations from '../../locations';
 
+import useLoadLocation from '../../render/useLoadLocation';
 import useAnimationLoop from '../../render/useAnimationLoop';
 
 import GameGrid from '../../components/gameGrid';
@@ -97,9 +97,6 @@ const Game: FC = () => {
   ] = useState<Record<string, BackgroundVersions>>({});
 
   const target = useRef<HTMLDivElement | null>(null);
-
-  const { width, height } = useWindowSize();
-
   const [isTalking, setIsTalking] = useState(false);
 
   useEffect(() => { // write lookup table
@@ -242,13 +239,13 @@ const Game: FC = () => {
     }
   }, [time, filteredBackgrounds[location.background]]);
 
-  useEffect(() => { // set canvas width and height
-    camera.current.aspect = window.innerWidth / window.innerHeight;
+  useWindowSizeEffect((width, height) => { // set canvas width and height
+    camera.current.aspect = width / height;
     camera.current.updateProjectionMatrix();
     if (renderer) {
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(width, height);
     }
-  }, [width, height]);
+  }, [renderer]);
 
   useEffect(() => { // handle keyboard
     function handleKeydown(event:KeyboardEvent) {

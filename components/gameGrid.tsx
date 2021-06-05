@@ -29,7 +29,7 @@ const Grid = styled.div`
 
 const GameGrid: FC<{children: ReactNode}> = ({ children }) => {
   const { loading, /* error, */ data } = useQuery(CHECKS);
-  const { checks }:{ checks:Record<string, number> } = data;
+  const { checks }:{ checks:Record<string, string> } = data;
 
   if (loading || !data) {
     return null;

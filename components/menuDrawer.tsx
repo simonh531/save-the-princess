@@ -1,8 +1,8 @@
 import {
-  FC, useEffect, useState,
+  FC, useEffect, useRef, useState,
 } from 'react';
 import ReactMarkdown from 'react-markdown';
-import styled, { useTheme } from 'styled-components';
+import styled from 'styled-components';
 import MenuIcon from '@material-ui/icons/Menu';
 import ChatIcon from '@material-ui/icons/Chat';
 import BusinessCenterIcon from '@material-ui/icons/BusinessCenter';
@@ -14,6 +14,7 @@ import * as CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
 import { StateItem } from '../utils/interfaces';
 import { getText, getAction } from '../utils/getters';
+import { useThemeSounds } from '../utils/hooks';
 // import NotificationDot from './notificationDot';
 
 const characterStats:Record<string, Record<string, number>> = CharacterStats;
@@ -164,23 +165,33 @@ const MenuDrawer: FC = () => {
   const [offside, setOffside] = useState(true);
   const [activeTab, setActiveTab] = useState('topics');
   const [infoId, setInfoId] = useState('');
+  const itemSound = useRef<HTMLAudioElement>();
+  const topicSound = useRef<HTMLAudioElement[]>([]);
   // const [notification, setNotification] = useState(false);
-  const { consonant, vowel } = useTheme();
-  const [playHoverSound, setPlayHoverSound] = useState(() => () => { /* do nothing */ });
-  const [withClickSound, setWithClickSound] = useState(() => (func:() => void) => () => func());
-
-  useEffect(() => {
-    const hover = new Audio(vowel);
-    const click = new Audio(consonant);
-    setPlayHoverSound(() => () => hover.play());
-    setWithClickSound(() => (func:() => void) => () => {
-      click.play();
-      func();
-    });
-  }, []);
+  const { playHoverSound, withClickSound } = useThemeSounds();
 
   const toggle = withClickSound(() => setOffside(!offside));
   const { topics, items, checks } = data;
+
+  useEffect(() => {
+    if (itemSound.current) {
+      itemSound.current.play();
+    } else {
+      itemSound.current = new Audio('/assets/item.ogg');
+    }
+  }, [items]);
+
+  useEffect(() => {
+    if (topicSound.current.length === 3) {
+      topicSound.current[Math.floor((Math.random() * 3) % 3)].play();
+    } else {
+      topicSound.current.push(
+        new Audio('/assets/topic1.ogg'),
+        new Audio('/assets/topic2.ogg'),
+        new Audio('/assets/topic3.ogg'),
+      );
+    }
+  }, [topics]);
 
   useEffect(() => setInfoId(''), [activeTab]); // close info when tab switches
   useEffect(() => {
