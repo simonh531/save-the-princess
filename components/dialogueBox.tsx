@@ -113,25 +113,28 @@ function processNextChar(text: string, oldText: string, index: number) {
       '*'.repeat(asteriskLength)}${
       newText.slice(nextIndex)
     }`;
-    nextIndex += 1;
   }
+  nextIndex += 1;
   return { newText, char, nextIndex };
 }
 
 const disallowed = ['hr'];
 const speed = 30;
 
-interface Props {
+const DialogueBox: FC<{
   setAdvance: Dispatch<SetStateAction<() => void>>
   advance: () => void
   setIsTalking: Dispatch<SetStateAction<boolean>>
   isTalking: boolean
-}
-const DialogueBox: FC<Props> = ({
+}> = ({
   setAdvance, advance, setIsTalking, isTalking,
 }) => {
   const { loading, /* error, */ data } = useQuery(DIALOGUE);
   const endDialogue = useRef(false);
+  const voices = useRef<Record<string, {
+    vowel: HTMLAudioElement,
+    consonant: HTMLAudioElement
+  } >>({});
   const [text, setText] = useState('');
   const { dialogueId, checks } = data;
 
@@ -186,11 +189,24 @@ const DialogueBox: FC<Props> = ({
     }
   }
 
+  // load all blips
+  useEffect(() => {
+    Object.entries(Themes).forEach(([id, characterTheme]) => {
+      if (characterTheme.vowel && characterTheme.consonant) {
+        voices.current[id] = {
+          vowel: new Audio(characterTheme.vowel),
+          consonant: new Audio(characterTheme.consonant),
+        };
+      }
+    });
+  }, []);
+
   useEffect(() => {
     if (dialogueId && dialogue.effect && !wait) { // wait will make it run twice
       dialogue.effect();
     }
   }, [dialogueId]);
+
   useEffect(() => { // handle advance
     if (dialogueId) { // changed to new dialogue
       if (isTalking) {
@@ -231,17 +247,15 @@ const DialogueBox: FC<Props> = ({
     let start: number;
     let id: number;
     let index = 0;
-    let prevTime = -1;
+    let nextTime = -1;
     let prevSyllableCount = 0;
     let punctuationDelay = 0;
-    const vowelBlip = new Audio();
-    const consonantBlip = new Audio();
     function animate(timestamp: number) {
       if (start === undefined) {
         start = timestamp;
       }
       // ready for new letter
-      if ((timestamp - start) / speed > prevTime) {
+      if ((timestamp - start) / speed > nextTime) {
         // have next character ready too so that syllable can make better predictions
         newText = nextNewText;
         char = nextChar;
@@ -256,35 +270,29 @@ const DialogueBox: FC<Props> = ({
             } else if (/,/.test(char)) {
               punctuationDelay = 3;
             }
-            if (syllable(nextNewText) > prevSyllableCount) {
+            if (syllable(nextNewText) > prevSyllableCount && voices.current[keys[0]]) {
+              const { vowel, consonant } = voices.current[dialogue.speaker || keys[0]];
               if (/[aeiouy]/.test(char.toLowerCase())) {
-                try {
-                  vowelBlip.pause();
-                  vowelBlip.currentTime = 0;
-                  vowelBlip.play();
-                } catch (e) {
-                  // console.log(e);
-                }
+                vowel.pause();
+                vowel.currentTime = 0;
+                vowel.play();
               } else {
-                try {
-                  consonantBlip.pause();
-                  consonantBlip.currentTime = 0;
-                  consonantBlip.play();
-                } catch (e) {
-                  // console.log(e);
-                }
+                consonant.pause();
+                consonant.currentTime = 0;
+                consonant.play();
               }
               prevSyllableCount = syllable(nextNewText);
             }
             setText(newText);
-            prevTime += 1 + punctuationDelay;
+            nextTime += 1 + punctuationDelay;
             punctuationDelay = 0;
           } else {
-            prevTime += 1;
+            nextTime += 1;
           }
         }
       }
-      if (oldText.charAt(index) && !endDialogue.current) {
+      if (oldText.charAt(index - 1) && !endDialogue.current) {
+        // the actual index is one behind the one we use for syllables
         id = requestAnimationFrame(animate);
       } else {
         setText(oldText);
@@ -301,10 +309,6 @@ const DialogueBox: FC<Props> = ({
         nextChar = processed.char;
         index = processed.nextIndex;
         if (nextChar) {
-          if (theme.vowel && theme.consonant) {
-            vowelBlip.src = theme.vowel;
-            consonantBlip.src = theme.consonant;
-          }
           setIsTalking(true);
           id = requestAnimationFrame(animate);
           return () => cancelAnimationFrame(id);

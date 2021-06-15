@@ -53,3 +53,7 @@ export function addItem(itemId:string):void {
 export function setTime(newTime:number):void {
   time(newTime);
 }
+
+export function setLocation(newLocation:string):void {
+  locationId(newLocation);
+}

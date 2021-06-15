@@ -214,7 +214,7 @@ const MenuDrawer: FC = () => {
         key={id}
         onClick={
           // withClickSound(
-            () => setInfoId(`topic/${id}}`)
+            () => setInfoId(`topic/${id}`)
           // )
         }
         // onMouseEnter={playHoverSound}

@@ -3,8 +3,13 @@ import { checks } from '../data/checks';
 
 const test:Location = {
   background: '/assets/test/testfield.jpg',
-  groundLightTexture: '/assets/test/testground.jpg',
-  skyLightTexture: '/assets/test/testceiling.jpg',
+  groundLight: '/assets/test/testground.jpg',
+  skyLight: '/assets/test/testceiling.jpg',
+  mapWidth: 5,
+  mapDepth: 5,
+  cameraX: 2,
+  cameraZ: 4,
+  direction: 0,
   walls: {
     plan: '/assets/test/testwallplan.png',
     tiles: {
@@ -22,6 +27,7 @@ const test:Location = {
         ffffff: {
           url: '/assets/test/testground.jpg',
           repeat: 2,
+          clearcoat: 1,
         },
       },
     },

@@ -1,4 +1,4 @@
-import { Object3D, Vector3 } from 'three';
+import { InstancedMesh, Mesh, Vector3 } from 'three';
 
 export interface WindowSize {
   width: number | undefined
@@ -27,11 +27,11 @@ export interface LocationEntity {
 }
 
 export interface GameEntity {
-  mesh: Object3D
+  mesh: Mesh
   getPosition: () => Vector3
   activate?: string | (() => void)
   getVisibility?: () => boolean
-  cameraAdjustment?: number[]
+  cameraAdjustment?: number[],
 }
 
 export interface Tile {
@@ -39,6 +39,7 @@ export interface Tile {
   colors?: number[]
   geometry?: string
   repeat?: number
+  clearcoat?: number
 }
 
 export interface Plane {
@@ -48,9 +49,14 @@ export interface Plane {
 
 export interface Location {
   background: string
-  groundLightTexture: string
-  skyLightTexture: string
-  walls: Plane
+  groundLight: string | number
+  skyLight: string | number
+  mapWidth: number
+  mapDepth: number
+  cameraX: number
+  cameraZ: number
+  direction: number
+  walls?: Plane
   horizontalPlanes: Plane[]
   entities?: Record<string, LocationEntity>
 }
@@ -98,4 +104,9 @@ export interface LookupTable {
   array: number[][][][],
   type: string
   indices?: number[],
+}
+
+export interface ScaledInstancedMesh {
+  mesh: InstancedMesh,
+  scale?: number
 }

@@ -6,30 +6,34 @@ import {
   Scene,
   PerspectiveCamera,
   WebGLRenderer,
-  WebGLCubeRenderTarget,
   Camera,
   Vector3,
   DirectionalLight,
   HemisphereLight,
   AmbientLight,
-  CanvasTexture,
+  Color,
+  sRGBEncoding,
+  Material,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
 import { useWindowSizeEffect } from '../../utils/hooks';
-import {
-  BackgroundVersions, GameEntity, Location, LookupTable,
-} from '../../utils/interfaces';
-import { makeLookupTable } from '../../utils/colorLookup';
-import Locations from '../../locations';
 
-import useLoadLocation from '../../render/useLoadLocation';
 import useAnimationLoop from '../../render/useAnimationLoop';
+import useMakeLookupTables from '../../render/useMakeLookupTables';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
 import MenuDrawer from '../../components/menuDrawer';
 import ChoiceDrawer from '../../components/choiceDrawer';
 import LocationDialogueButton from '../../components/locationDialogueButton';
+import useSunMoon from '../../render/useSunMoon';
+import useFilterBackground from '../../render/useFilterBackground';
+import useLoadWalls from '../../render/useLoadWalls';
+import useLoadEntities from '../../render/useLoadEntities';
+import useLoadLights from '../../render/useLoadLights';
+import useLoadPlanes from '../../render/useLoadPlanes';
+import useBackgroundShading from '../../render/useBackgroundShading';
+import useEnvMap from '../../render/useEnvMap';
 
 const GAME_STATE = gql`
   query GetGameState {
@@ -47,18 +51,14 @@ const GameArea = styled.main`
   overflow:hidden;
 `;
 
-const defaultAction = () => () => { /* do nothing */ };
+const FPS = styled.span`
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: red;
+`;
 
-const defaultLocation:Location = {
-  background: '',
-  groundLightTexture: '',
-  skyLightTexture: '',
-  walls: {
-    plan: '',
-    tiles: {},
-  },
-  horizontalPlanes: [],
-};
+const defaultAction = () => () => { /* do nothing */ };
 
 // units are meters let's say
 const depth = 0.1;
@@ -67,51 +67,39 @@ const cubeUnit = 3;
 const Game: FC = () => {
   const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
-  let location:Location = defaultLocation;
+  const [showFps, setShowFps] = useState(false);
+  const [fps, setFps] = useState(0);
   const {
-    focusId, locationId, time, checks,
+    focusId, checks,
   } = data;
 
-  if (locationId && Locations[locationId]) {
-    location = Locations[locationId];
-  }
   // initializable -- no need to update
   const scene = useRef(new Scene());
-  const [cameraDefaultPosition, setCameraDefaultPosition] = useState(new Vector3());
   const camera = useRef(new PerspectiveCamera());
   const dummyCamera = useRef(new Camera());
-  const [gameEntities, setGameEntities] = useState<Record<string, GameEntity>>({});
   const ambientLight = useRef(new AmbientLight(0xffffff, 0));
   const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
-  const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
+  const directionalLightTarget = useRef({ position: new Vector3(), color: new Color() });
+
+  const transitionQueue = useRef<{type: string, value: number, material?: Material}[]>([]);
 
   // need to update
   const [renderer, setRenderer] = useState<WebGLRenderer>();
-  const [canvasCtx, setCanvasCtx] = useState<CanvasRenderingContext2D | null>(null);
-  const [canvasTexture, setCanvasTexture] = useState<CanvasTexture>();
-  const [lookupTables, setLookupTables] = useState<Record<string, LookupTable>>({});
-  const [
-    filteredBackgrounds,
-    setFilteredBackgrounds,
-  ] = useState<Record<string, BackgroundVersions>>({});
 
   const target = useRef<HTMLDivElement | null>(null);
   const [isTalking, setIsTalking] = useState(false);
 
-  useEffect(() => { // write lookup table
-    async function makeLookupTables() {
-      setLookupTables({
-        nightfromday: await makeLookupTable('/assets/nightfromday.CUBE'),
-        LateSunset: await makeLookupTable('/assets/LateSunset.3DL'),
-      });
-    }
-    makeLookupTables();
-  }, []);
+  const lookupTables = useMakeLookupTables();
+  const filteredBackgrounds = useFilterBackground(lookupTables);
 
   useEffect(() => { // initialization
     if (!renderer) {
-      const newRenderer = new WebGLRenderer();
+      const newRenderer = new WebGLRenderer({
+        premultipliedAlpha: false,
+      });
+      newRenderer.gammaFactor = 2.2; // deprecated?
+      newRenderer.outputEncoding = sRGBEncoding;
       newRenderer.shadowMap.enabled = true;
       if (target.current) {
         target.current.replaceChild(newRenderer.domElement, target.current.childNodes[0]);
@@ -119,125 +107,44 @@ const Game: FC = () => {
       setRenderer(newRenderer);
     }
     directionalLight.current.castShadow = true;
-    directionalLight.current.shadow.mapSize.height = 1024;
-    directionalLight.current.shadow.mapSize.width = 1024;
-
-    if (!canvasCtx) {
-      const canvas = document.createElement('canvas');
-      setCanvasCtx(canvas.getContext('2d'));
-      setCanvasTexture(new CanvasTexture(canvas));
-    }
+    directionalLight.current.shadow.mapSize.height = 2048;
+    directionalLight.current.shadow.mapSize.width = 2048;
 
     scene.current.add(directionalLight.current);
-    scene.current.add(directionalLight.current.target);
-    scene.current.background = backgroundRenderTarget.current.texture;
+    scene.current.add(hemisphereLight.current);
+    scene.current.add(ambientLight.current);
   }, []);
 
-  useLoadLocation(
+  const planesDone = useLoadPlanes(
     scene.current,
-    location,
-    setCameraDefaultPosition,
+    cubeUnit,
+    depth,
+  );
+
+  const cameraDefaultPosition = useLoadWalls(
+    scene.current,
     camera.current,
     dummyCamera.current,
     directionalLight.current,
-    setGameEntities,
-    ambientLight.current,
-    hemisphereLight.current,
     cubeUnit,
     depth,
-    lookupTables,
-    filteredBackgrounds,
-    setFilteredBackgrounds,
   );
 
-  useEffect(() => { // handle sun/moon position/strength
-    const dayTime = time % 24;
-    const lightStrengthFraction = dayTime / 24;
-    const lightStrength = 0.12 + 0.48 * Math.sin(lightStrengthFraction * Math.PI);
-    const origin = directionalLight.current.target.position.clone();
-    if (dayTime >= 6 && dayTime <= 18) { // sun time
-      directionalLight.current.intensity = lightStrength;
-      const fraction = (dayTime - 6) / 12;
-      const blueStrength = (Math.sin(fraction * Math.PI) * 1.2) - 1; // range 0.2 to -1
-      const r = Math.min(1 - blueStrength, 1);
-      const g = 1 - Math.abs(blueStrength) / 2;
-      const b = Math.min(1 + blueStrength, 1);
-      directionalLight.current.color.setRGB(r, g, b);
-      origin.add(new Vector3(
-        Math.cos(fraction * Math.PI) * 10,
-        Math.sin(fraction * Math.PI) * 10 + 0.1, // 0.1 so you can still see at sunset
-        0,
-      ));
-      directionalLight.current.position.copy(origin);
-    } else { // moon time
-      directionalLight.current.intensity = 0.05; // moon always gets the same amount of sun
-      directionalLight.current.color.setHex(0xffffff);
-      const fraction = ((dayTime + 6) % 12) / 12;
-      origin.add(new Vector3(
-        Math.cos(fraction * Math.PI) * 10,
-        Math.sin(fraction * Math.PI) * 10,
-        0,
-      ));
-      directionalLight.current.position.copy(origin);
-    }
-    hemisphereLight.current.intensity = lightStrength * 0.9;
-    ambientLight.current.intensity = lightStrength * 0.8;
-  }, [time]);
-  useEffect(() => { // handle background shading
-    if (canvasCtx && canvasTexture && renderer) {
-      const dayTime = time % 24;
-      if (dayTime >= 6 && dayTime <= 18) { // sun time
-        const fraction = (dayTime - 6) / 12;
-        const strength = (1 - Math.sin(fraction * Math.PI));
-        canvasCtx.canvas.width = filteredBackgrounds[location.background].night.width;
-        canvasCtx.canvas.height = filteredBackgrounds[location.background].night.height;
-        canvasCtx.putImageData(
-          filteredBackgrounds[location.background].default,
-          0, 0,
-        );
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-          tempCanvas.width = canvasCtx.canvas.width;
-          tempCanvas.height = canvasCtx.canvas.height;
-          tempCtx.putImageData(
-            filteredBackgrounds[location.background].sunset,
-            0, 0,
-          );
-          canvasCtx.globalCompositeOperation = 'source-over';
-          canvasCtx.globalAlpha = strength;
-          canvasCtx.drawImage(tempCanvas, 0, 0);
-        }
-        canvasTexture.needsUpdate = true;
-        backgroundRenderTarget.current.setSize(canvasCtx.canvas.height, canvasCtx.canvas.height);
-        backgroundRenderTarget.current.fromEquirectangularTexture(
-          renderer, canvasTexture,
-        );
-      } else { // moon time
-        const fraction = ((dayTime + 6) % 12) / 12;
-        const strength = Math.sin(fraction * Math.PI) * 0.85;
-        canvasCtx.canvas.width = filteredBackgrounds[location.background].night.width;
-        canvasCtx.canvas.height = filteredBackgrounds[location.background].night.height;
-        canvasCtx.putImageData(
-          filteredBackgrounds[location.background].night,
-          0, 0,
-        );
-        canvasCtx.globalCompositeOperation = 'darken';
-        canvasCtx.globalAlpha = strength;
-        const gradient = canvasCtx.createLinearGradient(0, 0, 0, canvasCtx.canvas.height);
-        gradient.addColorStop(0, 'black');
-        gradient.addColorStop(0.5, 'black');
-        gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
-        canvasCtx.fillStyle = gradient;
-        canvasCtx.fillRect(0, 0, canvasCtx.canvas.width, canvasCtx.canvas.height);
-        canvasTexture.needsUpdate = true;
-        backgroundRenderTarget.current.setSize(canvasCtx.canvas.height, canvasCtx.canvas.height);
-        backgroundRenderTarget.current.fromEquirectangularTexture(
-          renderer, canvasTexture,
-        );
-      }
-    }
-  }, [time, filteredBackgrounds[location.background]]);
+  const gameEntities = useLoadEntities(
+    scene.current,
+    camera.current.position,
+    !!cameraDefaultPosition,
+    cubeUnit,
+    depth,
+  );
+
+  const lightsLoaded = useLoadLights(hemisphereLight.current, ambientLight.current);
+
+  useSunMoon(
+    directionalLight.current, hemisphereLight.current, ambientLight.current,
+    directionalLightTarget.current,
+  );
+  const backgroundShaded = useBackgroundShading(renderer, scene.current, filteredBackgrounds);
 
   useWindowSizeEffect((width, height) => { // set canvas width and height
     camera.current.aspect = width / height;
@@ -260,52 +167,98 @@ const Game: FC = () => {
         case 'ArrowRight':
           advanceAction();
           break;
+        case 'Backquote':
+          setShowFps(!showFps);
+          break;
         default:
           break;
       }
     }
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [advanceAction]);
+  }, [advanceAction, showFps]);
 
   useEffect(() => { // handle camera movement on focus change
-    if (focusId && gameEntities[focusId]) { // second part necessary for refresh
-      const { cameraAdjustment, mesh } = gameEntities[focusId];
-      const focusPosition = mesh.position.clone();
-      if (cameraAdjustment) {
-        focusPosition.add(new Vector3(...cameraAdjustment));
+    if (cameraDefaultPosition && gameEntities) {
+      if (focusId && gameEntities[focusId]) { // second part necessary for refresh
+        const { cameraAdjustment, mesh } = gameEntities[focusId];
+        const focusPosition = mesh.position.clone();
+        if (cameraAdjustment) {
+          focusPosition.add(new Vector3(...cameraAdjustment));
+        }
+        // math
+        const destination = cameraDefaultPosition.clone()
+          .sub(focusPosition)
+          .normalize()
+          .multiplyScalar(2)
+          .add(focusPosition);
+        dummyCamera.current.position.copy(destination);
+        dummyCamera.current.lookAt(focusPosition);
+      } else {
+        dummyCamera.current.position.copy(cameraDefaultPosition);
       }
-      // math
-      const destination = cameraDefaultPosition.clone()
-        .sub(focusPosition)
-        .normalize()
-        .multiplyScalar(2)
-        .add(focusPosition);
-      dummyCamera.current.position.copy(destination);
-      dummyCamera.current.lookAt(focusPosition);
-    } else {
-      dummyCamera.current.position.copy(cameraDefaultPosition);
     }
   }, [focusId, cameraDefaultPosition, gameEntities]);
 
   // update entities based on checks
   useEffect(() => {
-    Object.values(gameEntities).forEach((entity) => {
-      if (entity.getVisibility) {
-        // eslint-disable-next-line no-param-reassign
-        entity.mesh.visible = entity.getVisibility();
-      }
-      entity.mesh.position.copy(entity.getPosition());
-    });
-  }, [checks]);
+    if (gameEntities) {
+      Object.values(gameEntities).forEach((entity) => {
+        if (entity.getVisibility) {
+          if (entity.getVisibility()) {
+            if (Array.isArray(entity.mesh.material) && entity.mesh.material[0].opacity === 0) {
+              transitionQueue.current.push({
+                type: 'opacity',
+                value: 1,
+                material: entity.mesh.material[0],
+              });
+            } else if (!Array.isArray(entity.mesh.material) && entity.mesh.material.opacity === 0) {
+              transitionQueue.current.push({
+                type: 'opacity',
+                value: 1,
+                material: entity.mesh.material,
+              });
+            }
+          } else if (Array.isArray(entity.mesh.material) && entity.mesh.material[0].opacity === 1) {
+            transitionQueue.current.push({
+              type: 'opacity',
+              value: 0,
+              material: entity.mesh.material[0],
+            });
+          } else if (!Array.isArray(entity.mesh.material) && entity.mesh.material.opacity === 1) {
+            transitionQueue.current.push({
+              type: 'opacity',
+              value: 0,
+              material: entity.mesh.material,
+            });
+          }
+        }
+        entity.mesh.position.copy(entity.getPosition());
+      });
+    }
+  }, [gameEntities, checks]);
 
   useAnimationLoop(
     renderer,
     scene.current,
     camera.current,
     dummyCamera.current,
+    directionalLight.current,
+    directionalLightTarget.current,
     gameEntities,
+    transitionQueue,
     advanceAction,
+    showFps ? setFps : null,
+  );
+
+  useEnvMap(
+    renderer,
+    scene.current,
+    !!cameraDefaultPosition
+    && planesDone
+    && lightsLoaded
+    && !!gameEntities
+    && backgroundShaded,
   );
 
   if (loading || !data) {
@@ -315,6 +268,7 @@ const Game: FC = () => {
   return (
     <GameArea ref={target}>
       <div />
+      {showFps && <FPS>{fps}</FPS>}
       <GameGrid>
         <DialogueBox
           setAdvance={setAdvanceAction}
