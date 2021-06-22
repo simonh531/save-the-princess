@@ -14,7 +14,7 @@ export interface MeshData {
   file: string
   geometry: string
   height: number
-  cameraAdjustment?: number[]
+  cameraAdjustment?: Vector3
 }
 
 export interface LocationEntity {
@@ -22,16 +22,16 @@ export interface LocationEntity {
   x: number
   y?: number
   z: number
-  activate?: string | (() => void)
+  focusPositionId?: string
+  activate?: string | { focusId: string, dialogueId: string } | (() => void)
   visible?: () => boolean
 }
 
 export interface GameEntity {
   mesh: Mesh
   getPosition: () => Vector3
-  activate?: string | (() => void)
+  activate?: string | { focusId: string, dialogueId: string } | (() => void)
   getVisibility?: () => boolean
-  cameraAdjustment?: number[],
 }
 
 export interface Tile {
@@ -58,12 +58,14 @@ export interface Location {
   direction: number
   walls?: Plane
   horizontalPlanes: Plane[]
-  entities?: Record<string, LocationEntity>
+  focusPositions?: Record<string, Vector3>
+  entities?: LocationEntity[]
 }
 
 export interface Dialogue {
   text: (() => string) | string
   speaker?: string
+  speakerFocusPositionId?: string
   next?: string
   nextAction?: () => void
   effect?: () => void

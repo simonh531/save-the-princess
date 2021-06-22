@@ -1,11 +1,11 @@
 import {
-  Dispatch, MutableRefObject, SetStateAction, useEffect, useRef,
+  MutableRefObject, useEffect, useRef, useState,
 } from 'react';
 import {
   Camera, Color, DirectionalLight, Euler, Material, Raycaster, Renderer, Scene, Vector2, Vector3,
 } from 'three';
 import { GameEntity } from '../utils/interfaces';
-import { setFocus, focusId } from '../data/state';
+import { focusId } from '../data/state';
 import { getAction } from '../utils/getters';
 import { transitionOpacity } from './transitions';
 
@@ -16,21 +16,21 @@ const useAnimationLoop = (
   dummyCamera: Camera,
   directionalLight: DirectionalLight,
   directionalLightTarget: { position: Vector3; color: Color; },
-  gameEntities: Record<string, GameEntity> | undefined,
+  gameEntities: GameEntity[],
   transitionQueue: MutableRefObject<{
     type: string;
     value: number;
     material?: Material | undefined;
   }[]>,
   advanceAction: () => void,
-  setFps: Dispatch<SetStateAction<number>> | null,
-): void => {
+  showFps: boolean,
+): number => {
   const raycaster = useRef(new Raycaster());
   const prevTimestamp = useRef(0);
   const mouseX = useRef(0);
   const mouseY = useRef(0);
-  const animationFrameId = useRef(0);
   const activate = useRef(() => { /* do nothing */ });
+  const [fps, setFps] = useState(0);
 
   function click() {
     activate.current();
@@ -40,8 +40,16 @@ const useAnimationLoop = (
     mouseX.current = event.clientX;
     mouseY.current = event.clientY;
   }
+
   useEffect(() => { // animation loop
-    const prevPosition = new Vector3();
+    let animationFrameId: number;
+    let prevPositionX = 0;
+    let prevPositionY = 0;
+    let prevPositionZ = 0;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let prevCameraX = 0;
+    let prevCameraY = 0;
     if (!mouseX.current || !mouseY.current) {
       mouseX.current = window.innerWidth / 2;
       mouseY.current = window.innerHeight / 2;
@@ -49,9 +57,6 @@ const useAnimationLoop = (
     function animate(timestamp: number) {
       if (renderer) {
         const delta = timestamp - prevTimestamp.current;
-        if (delta && setFps) {
-          setFps(Math.round(1000 / delta));
-        }
         camera.quaternion.slerp(dummyCamera.quaternion, Math.min(delta * 0.003125, 1));
         camera.position.lerp(dummyCamera.position, Math.min(delta * 0.003125, 1));
         directionalLight.position.lerp(
@@ -62,11 +67,11 @@ const useAnimationLoop = (
         );
         if (gameEntities) {
           if ( // only change where entities are facing if moving
-            Math.abs(camera.position.x - prevPosition.x) > 0.001
-            || Math.abs(camera.position.y - prevPosition.y) > 0.001
-            || Math.abs(camera.position.z - prevPosition.z) > 0.001
+            Math.abs(camera.position.x - prevPositionX) > 0.001
+            || Math.abs(camera.position.y - prevPositionY) > 0.001
+            || Math.abs(camera.position.z - prevPositionZ) > 0.001
           ) {
-            Object.values(gameEntities).forEach((entity) => {
+            gameEntities.forEach((entity) => {
               entity.mesh.lookAt(
                 camera.position.x,
                 entity.mesh.position.y, // keep parallel with ground
@@ -86,36 +91,42 @@ const useAnimationLoop = (
           }
 
           // handle pointer
-          raycaster.current.setFromCamera(
-            new Vector2(
-              (mouseX.current / window.innerWidth) * 2 - 1,
-              (mouseY.current / window.innerHeight) * -2 + 1,
-            ),
-            camera,
-          );
-          const intersection = raycaster.current.intersectObjects(
-            Object.values(gameEntities)
-              .filter((gameEntity) => gameEntity.activate
-                && (!gameEntity.getVisibility || gameEntity.getVisibility()))
-              .map((gameEntity) => gameEntity.mesh),
-          )[0];
-          if (intersection) {
-            // with browser dev tools open doesn't seem to work, but value
-            // is actually changed. Probably the check is off with it open?
-            // eslint-disable-next-line no-param-reassign
-            renderer.domElement.style.cursor = 'pointer';
-            if (focusId()) {
-              activate.current = advanceAction;
+          if (
+            mouseX.current !== prevMouseX
+            || mouseY.current !== prevMouseY
+            || Math.abs(camera.rotation.x - prevCameraX) > 0.00001
+            || Math.abs(camera.rotation.y - prevCameraY) > 0.00001
+          ) {
+            raycaster.current.setFromCamera(
+              new Vector2(
+                (mouseX.current / window.innerWidth) * 2 - 1,
+                (mouseY.current / window.innerHeight) * -2 + 1,
+              ),
+              camera,
+            );
+            const intersection = raycaster.current.intersectObjects(
+              gameEntities
+                .filter((gameEntity) => gameEntity.activate
+                  && (!gameEntity.getVisibility || gameEntity.getVisibility()))
+                .map((gameEntity) => gameEntity.mesh),
+            )[0];
+            if (intersection) {
+              // with browser dev tools open doesn't seem to work, but value
+              // is actually changed. Probably the check is off with it open?
+              // eslint-disable-next-line no-param-reassign
+              renderer.domElement.style.cursor = 'pointer';
+              if (focusId()) { // needs to be immediate or causes race condition with camera focus
+                activate.current = advanceAction;
+              } else {
+                activate.current = getAction(gameEntities[
+                  parseInt(intersection.object.name, 10)
+                ].activate);
+              }
             } else {
-              activate.current = () => {
-                setFocus(intersection.object.name);
-                getAction(gameEntities[intersection.object.name].activate)();
-              };
+              // eslint-disable-next-line no-param-reassign
+              renderer.domElement.style.cursor = 'default';
+              activate.current = () => { /* do nothing */ };
             }
-          } else {
-            // eslint-disable-next-line no-param-reassign
-            renderer.domElement.style.cursor = 'default';
-            activate.current = () => { /* do nothing */ };
           }
         }
         if (!focusId()) { // only rotate camera if not focused
@@ -134,23 +145,31 @@ const useAnimationLoop = (
         // } else {
         renderer.render(scene, camera);
         // }
-        prevPosition.copy(camera.position);
+        [prevPositionX, prevPositionY, prevPositionZ] = camera.position.toArray();
+        [prevCameraX, prevCameraY] = camera.rotation.toArray();
+        prevMouseX = mouseX.current;
+        prevMouseY = mouseY.current;
+        if (showFps && delta) {
+          setFps(Math.round(1000 / delta));
+        }
       }
       prevTimestamp.current = timestamp;
-      animationFrameId.current = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
     }
     if (renderer) {
-      animationFrameId.current = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(animate);
       window.addEventListener('mousemove', handleMove);
       renderer.domElement.addEventListener('click', click);
       return () => {
-        cancelAnimationFrame(animationFrameId.current);
+        cancelAnimationFrame(animationFrameId);
         window.removeEventListener('mousemove', handleMove);
         renderer.domElement.removeEventListener('click', click);
       };
     }
     return () => { /* do nothing */ };
-  }, [renderer, gameEntities, advanceAction, setFps]);
+  }, [renderer, gameEntities, advanceAction, showFps]);
+
+  return fps;
 };
 
 export default useAnimationLoop;

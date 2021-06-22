@@ -25,6 +25,7 @@ export const intro:Dialogue[] = [
     },
   }, {
     speaker: 'kalvin',
+    speakerFocusPositionId: '',
     text: '*I blushed in response. Normally I would have put up some excuse or protest, but Hyde knew me too well. Instead, I pouted and rolled my eyes.*',
     choice: {
       'Leave embarassingly': unfocus,

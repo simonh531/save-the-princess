@@ -4,6 +4,7 @@ import {
 import styled, { ThemeProvider, DefaultTheme } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { gql, useQuery } from '@apollo/client';
+import { Camera, Vector3 } from 'three';
 import { syllable } from 'syllable';
 import { Dialogue } from '../utils/interfaces';
 import Themes from '../styles/characterThemes';
@@ -14,7 +15,7 @@ import { getAction, getText } from '../utils/getters';
 const DIALOGUE = gql`
   query GetDialogueId {
     dialogueId
-    checks
+    focusId
   }
 `;
 
@@ -61,9 +62,12 @@ const ContinueBox = styled.div`
   }
 `;
 
-const Triangle = styled.div`
+const Triangle = styled.div.attrs<{position: number}>(({ position }) => ({
+  style: {
+    left: `calc(${50 + position * 100}% - 10px)`,
+  },
+}))<{position: number}>`
   position: absolute;
-  left: calc(50% - 10px);
   bottom: 100%;
   border-left: 10px solid transparent;
   border-right: 10px solid transparent;
@@ -126,8 +130,10 @@ const DialogueBox: FC<{
   advance: () => void
   setIsTalking: Dispatch<SetStateAction<boolean>>
   isTalking: boolean
+  camera: Camera
+  focusPositions: Record<string, Vector3>
 }> = ({
-  setAdvance, advance, setIsTalking, isTalking,
+  setAdvance, advance, setIsTalking, isTalking, camera, focusPositions,
 }) => {
   const { loading, /* error, */ data } = useQuery(DIALOGUE);
   const endDialogue = useRef(false);
@@ -136,7 +142,9 @@ const DialogueBox: FC<{
     consonant: HTMLAudioElement
   } >>({});
   const [text, setText] = useState('');
-  const { dialogueId, checks } = data;
+  // const [speakerFocusPositionId, setSpeakerFocusPositionId] = useState('');
+  const [trianglePosition, setTrianglePosition] = useState(0);
+  const { dialogueId, focusId } = data;
 
   let wait = false;
   let isSequence = false;
@@ -202,10 +210,44 @@ const DialogueBox: FC<{
   }, []);
 
   useEffect(() => {
-    if (dialogueId && dialogue.effect && !wait) { // wait will make it run twice
-      dialogue.effect();
+    if (dialogueId) {
+      if (dialogue.effect && !wait) { // wait will make it run twice
+        dialogue.effect();
+      }
+    //   if (typeof dialogue.speakerFocusPositionId === 'string') {
+    //     setSpeakerFocusPositionId(dialogue.speakerFocusPositionId);
+    //   } else if (!(isSequence && parseInt(keys[2], 10) > 0)) {
+    //     setSpeakerFocusPositionId(focusId);
+    //   }
+    // } else {
+    //   setSpeakerFocusPositionId('');
     }
   }, [dialogueId]);
+
+  useEffect(() => {
+    let animationFrameId = 0;
+    let prevPositionX = 0;
+    const position = new Vector3();
+
+    function animate() {
+      position.copy(focusPositions[dialogue.speakerFocusPositionId || focusId]);
+      position.project(camera);
+      setTrianglePosition(position.x);
+      if (
+        Math.abs(position.x - prevPositionX) > 0.00001
+      ) {
+        prevPositionX = position.x;
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    }
+    if (focusId && dialogue.speakerFocusPositionId !== '') {
+      animationFrameId = requestAnimationFrame(animate);
+      return () => {
+        cancelAnimationFrame(animationFrameId);
+      };
+    }
+    return () => { /* do nothing */ };
+  }, [dialogueId, focusId, focusPositions]);
 
   useEffect(() => { // handle advance
     if (dialogueId) { // changed to new dialogue
@@ -348,8 +390,7 @@ const DialogueBox: FC<{
   return (
     <ThemeProvider theme={theme}>
       <Box visible={dialogueId} onClick={isTalking ? advance : () => { /* do nothing */ }}>
-        {isSpeech(keys[0]) && checks.identity !== dialogue.speaker
-        && <Triangle />}
+        {dialogue.speakerFocusPositionId !== '' && <Triangle position={trianglePosition} />}
         <TextBox clickThrough={isTalking || !dialogueId}>
           <ReactMarkdown components={components} disallowedElements={disallowed}>
             {text}

@@ -34,6 +34,7 @@ import useLoadLights from '../../render/useLoadLights';
 import useLoadPlanes from '../../render/useLoadPlanes';
 import useBackgroundShading from '../../render/useBackgroundShading';
 import useEnvMap from '../../render/useEnvMap';
+import useFocusPositions from '../../render/useFocusPositions';
 
 const GAME_STATE = gql`
   query GetGameState {
@@ -68,7 +69,6 @@ const Game: FC = () => {
   const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
   const [showFps, setShowFps] = useState(false);
-  const [fps, setFps] = useState(0);
   const {
     focusId, checks,
   } = data;
@@ -138,6 +138,7 @@ const Game: FC = () => {
     depth,
   );
 
+  const focusPositions = useFocusPositions(cubeUnit);
   const lightsLoaded = useLoadLights(hemisphereLight.current, ambientLight.current);
 
   useSunMoon(
@@ -179,31 +180,26 @@ const Game: FC = () => {
   }, [advanceAction, showFps]);
 
   useEffect(() => { // handle camera movement on focus change
-    if (cameraDefaultPosition && gameEntities) {
-      if (focusId && gameEntities[focusId]) { // second part necessary for refresh
-        const { cameraAdjustment, mesh } = gameEntities[focusId];
-        const focusPosition = mesh.position.clone();
-        if (cameraAdjustment) {
-          focusPosition.add(new Vector3(...cameraAdjustment));
-        }
+    if (cameraDefaultPosition && focusPositions) {
+      if (focusId && focusPositions[focusId]) { // second part necessary for refresh
         // math
         const destination = cameraDefaultPosition.clone()
-          .sub(focusPosition)
+          .sub(focusPositions[focusId])
           .normalize()
           .multiplyScalar(2)
-          .add(focusPosition);
+          .add(focusPositions[focusId]);
         dummyCamera.current.position.copy(destination);
-        dummyCamera.current.lookAt(focusPosition);
+        dummyCamera.current.lookAt(focusPositions[focusId]);
       } else {
         dummyCamera.current.position.copy(cameraDefaultPosition);
       }
     }
-  }, [focusId, cameraDefaultPosition, gameEntities]);
+  }, [focusId, cameraDefaultPosition, focusPositions]);
 
   // update entities based on checks
   useEffect(() => {
-    if (gameEntities) {
-      Object.values(gameEntities).forEach((entity) => {
+    if (gameEntities.length) {
+      gameEntities.forEach((entity) => {
         if (entity.getVisibility) {
           if (entity.getVisibility()) {
             if (Array.isArray(entity.mesh.material) && entity.mesh.material[0].opacity === 0) {
@@ -238,7 +234,7 @@ const Game: FC = () => {
     }
   }, [gameEntities, checks]);
 
-  useAnimationLoop(
+  const fps = useAnimationLoop(
     renderer,
     scene.current,
     camera.current,
@@ -248,7 +244,7 @@ const Game: FC = () => {
     gameEntities,
     transitionQueue,
     advanceAction,
-    showFps ? setFps : null,
+    showFps,
   );
 
   useEnvMap(
@@ -275,6 +271,8 @@ const Game: FC = () => {
           advance={advanceAction}
           setIsTalking={setIsTalking}
           isTalking={isTalking}
+          camera={camera.current}
+          focusPositions={focusPositions || {}}
         />
         <MenuDrawer />
         <ChoiceDrawer isTalking={isTalking} />

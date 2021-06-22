@@ -1,7 +1,8 @@
 import { PNG } from 'pngjs';
 import {
   BoxGeometry, ExtrudeGeometry, InstancedMesh,
-  MeshPhysicalMaterial, Object3D, RepeatWrapping, TextureLoader, sRGBEncoding,
+  MeshPhysicalMaterial, MeshStandardMaterial,
+  Object3D, RepeatWrapping, TextureLoader, sRGBEncoding,
 } from 'three';
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { ScaledInstancedMesh, Tile } from '../utils/interfaces';
@@ -59,13 +60,20 @@ async function createInstancedMeshes(
     geometry = new BoxGeometry(cubeUnit, cubeUnit, depth);
   }
   wallMap.encoding = sRGBEncoding;
-  let material:MeshPhysicalMaterial | MeshPhysicalMaterial[] = new MeshPhysicalMaterial({
+  let material: MeshStandardMaterial | MeshStandardMaterial[];
+  const standardSettings = {
     map: wallMap,
     transparent: typeof tile === 'string' || !tile.geometry,
     envMapIntensity: 0.15,
-  });
+  };
   if (tile.clearcoat) {
-    material.clearcoat = tile.clearcoat;
+    const physicalSettings = {
+      ...standardSettings,
+      clearcoat: tile.clearcoat,
+    };
+    material = new MeshPhysicalMaterial(physicalSettings);
+  } else {
+    material = new MeshStandardMaterial(standardSettings);
   }
   if (tile.colors) {
     material = [

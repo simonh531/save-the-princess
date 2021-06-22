@@ -10,20 +10,28 @@ const test:Location = {
   cameraZ: 4,
   direction: 0,
   horizontalPlanes: [],
-  entities: {
-    hyde: {
+  entities: [
+    {
       meshId: 'hyde',
       x: 3,
       z: 3,
-      activate: 'hyde/intro',
+      focusPositionId: 'hyde',
+      activate: {
+        focusId: 'hyde',
+        dialogueId: 'hyde/intro',
+      },
     },
-    present: {
+    {
       meshId: 'present',
       x: 1.5,
       z: 3,
-      activate: 'present/ackbar',
+      focusPositionId: 'present',
+      activate: {
+        focusId: 'present',
+        dialogueId: 'present/ackbar',
+      },
     },
-  },
+  ],
 };
 
 export default test;

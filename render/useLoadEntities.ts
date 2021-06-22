@@ -28,20 +28,20 @@ const useLoadEntities = (
   wallsLoaded: boolean, // indicates that curent camera position is correct
   cubeUnit: number, // possibly moved to location file
   depth: number, // possibly moved to location file
-):Record<string, GameEntity> | undefined => {
+):GameEntity[] => {
   const { data } = useQuery(LOCATION);
   const { locationId } = data;
-  const [gameEntities, setGameEntities] = useState<Record<string, GameEntity> | undefined>();
+  const [gameEntities, setGameEntities] = useState<GameEntity[]>([]);
 
   async function loadEntities() {
     const location = Locations[locationId];
     const { entities, mapWidth, mapDepth } = location;
-    const holder:Record<string, GameEntity> = {};
+    let holder:GameEntity[] = [];
 
-    if (entities) {
+    if (entities && entities.length) {
       const svgLoader = new SVGLoader();
       const loader = new TextureLoader();
-      await Promise.all(Object.entries(entities).map(async ([id, entity]) => {
+      holder = await Promise.all(entities.map(async (entity, index) => {
         const entityData = MeshData[entity.meshId];
         const [svgData, texture] = await Promise.all([
           svgLoader.loadAsync(entityData.geometry),
@@ -72,7 +72,7 @@ const useLoadEntities = (
         entityMesh.scale.set(scale, -scale, -0.01);
         entityMesh.castShadow = true;
         entityMesh.receiveShadow = true;
-        entityMesh.name = id;
+        entityMesh.name = `${index}`;
         entityMesh.position.set(
           (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
           (entityData.height - cubeUnit) / 2,
@@ -86,11 +86,10 @@ const useLoadEntities = (
           (entityData.height - cubeUnit) / 2,
           cameraPosition.z,
         );
-
-        holder[id] = {
+        scene.add(entityMesh);
+        return {
           mesh: entityMesh,
           activate: entity.activate,
-          cameraAdjustment: entityData.cameraAdjustment,
           getVisibility: entity.visible,
           getPosition: () => new Vector3(
             (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
@@ -98,7 +97,6 @@ const useLoadEntities = (
             (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
           ),
         };
-        scene.add(entityMesh);
       }));
     }
     setGameEntities(holder);
@@ -106,7 +104,7 @@ const useLoadEntities = (
   }
 
   useEffect(() => {
-    setGameEntities(undefined);
+    setGameEntities([]);
     if (Locations[locationId] && wallsLoaded) {
       const entities = loadEntities();
       return () => {

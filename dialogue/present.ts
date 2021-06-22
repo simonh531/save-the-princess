@@ -3,6 +3,7 @@ import { addItem, unfocus } from '../data/state';
 import { setCheck } from '../data/checks';
 
 export const pickup:Dialogue = {
+  speakerFocusPositionId: '',
   text: 'This looks like a good present. Do you want to take it?',
   choice: {
     Yes: () => {
@@ -15,6 +16,7 @@ export const pickup:Dialogue = {
 };
 
 export const ackbar:Dialogue = {
+  speakerFocusPositionId: '',
   text: "It's a trap!",
   next: '',
 };

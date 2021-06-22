@@ -26,7 +26,7 @@ export async function cleanTileArray(
 }
 
 export async function cleanEntities(
-  entities:Promise<Record<string, GameEntity>>,
+  entities:Promise<GameEntity[]>,
 ):Promise<void> {
-  Object.values(await entities).forEach((entity) => cleanup(entity.mesh));
+  (await entities).forEach((entity) => cleanup(entity.mesh));
 }

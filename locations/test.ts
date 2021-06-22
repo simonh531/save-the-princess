@@ -41,39 +41,59 @@ const test:Location = {
       },
     },
   ],
-  entities: {
-    princess1: {
+  entities: [
+    {
       meshId: 'testprincess',
       x: 1,
       z: 3.5,
-      activate: 'testprincess/tutorial',
+      focusPositionId: 'testprincess1',
+      activate: {
+        focusId: 'testprincess1',
+        dialogueId: 'testprincess/tutorial',
+      },
     },
-    princess: {
+    {
       meshId: 'testprincess',
       x: 1.9,
       z: 1.5,
-      activate: 'testprincess/birthdayPout',
+      focusPositionId: 'testprincess',
+      activate: {
+        focusId: 'testprincess',
+        dialogueId: 'testprincess/birthdayPout',
+      },
     },
-    princess2: {
+    {
       meshId: 'testprincess',
       x: 3,
       z: 3.5,
-      activate: 'testprincess/changeTime',
+      focusPositionId: 'testprincess2',
+      activate: {
+        focusId: 'testprincess2',
+        dialogueId: 'testprincess/changeTime',
+      },
     },
-    hyde: {
+    {
       meshId: 'hyde',
       x: 2.4,
       z: 3,
-      activate: 'hyde/intro',
+      focusPositionId: 'hyde',
+      activate: {
+        focusId: 'hyde',
+        dialogueId: 'hyde/intro',
+      },
     },
-    present: {
+    {
       meshId: 'present',
       x: 1.5,
       z: 3,
-      activate: 'present/pickup',
+      focusPositionId: 'present',
+      activate: {
+        focusId: 'present',
+        dialogueId: 'present/pickup',
+      },
       visible: () => !checks().presentTaken,
     },
-  },
+  ],
 };
 
 export default test;
