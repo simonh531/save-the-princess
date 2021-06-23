@@ -69,9 +69,7 @@ const Game: FC = () => {
   const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
   const [showFps, setShowFps] = useState(false);
-  const {
-    focusId, checks,
-  } = data;
+  const { checks } = data;
 
   // initializable -- no need to update
   const scene = useRef(new Scene());
@@ -113,6 +111,7 @@ const Game: FC = () => {
     scene.current.add(directionalLight.current);
     scene.current.add(hemisphereLight.current);
     scene.current.add(ambientLight.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const planesDone = useLoadPlanes(
@@ -179,23 +178,6 @@ const Game: FC = () => {
     return () => window.removeEventListener('keydown', handleKeydown);
   }, [advanceAction, showFps]);
 
-  useEffect(() => { // handle camera movement on focus change
-    if (cameraDefaultPosition && focusPositions) {
-      if (focusId && focusPositions[focusId]) { // second part necessary for refresh
-        // math
-        const destination = cameraDefaultPosition.clone()
-          .sub(focusPositions[focusId])
-          .normalize()
-          .multiplyScalar(2)
-          .add(focusPositions[focusId]);
-        dummyCamera.current.position.copy(destination);
-        dummyCamera.current.lookAt(focusPositions[focusId]);
-      } else {
-        dummyCamera.current.position.copy(cameraDefaultPosition);
-      }
-    }
-  }, [focusId, cameraDefaultPosition, focusPositions]);
-
   // update entities based on checks
   useEffect(() => {
     if (gameEntities.length) {
@@ -245,6 +227,8 @@ const Game: FC = () => {
     transitionQueue,
     advanceAction,
     showFps,
+    cameraDefaultPosition,
+    focusPositions,
   );
 
   useEnvMap(

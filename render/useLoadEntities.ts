@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
   Mesh,
@@ -33,7 +33,7 @@ const useLoadEntities = (
   const { locationId } = data;
   const [gameEntities, setGameEntities] = useState<GameEntity[]>([]);
 
-  async function loadEntities() {
+  const loadEntities = useCallback(async () => {
     const location = Locations[locationId];
     const { entities, mapWidth, mapDepth } = location;
     let holder:GameEntity[] = [];
@@ -72,7 +72,7 @@ const useLoadEntities = (
         entityMesh.scale.set(scale, -scale, -0.01);
         entityMesh.castShadow = true;
         entityMesh.receiveShadow = true;
-        entityMesh.name = `${index}`;
+        entityMesh.userData.index = index;
         entityMesh.position.set(
           (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
           (entityData.height - cubeUnit) / 2,
@@ -101,7 +101,7 @@ const useLoadEntities = (
     }
     setGameEntities(holder);
     return holder;
-  }
+  }, [cameraPosition, cubeUnit, depth, locationId, scene]);
 
   useEffect(() => {
     setGameEntities([]);
@@ -112,7 +112,7 @@ const useLoadEntities = (
       };
     }
     return () => { /* do nothing */ };
-  }, [locationId, wallsLoaded]);
+  }, [locationId, wallsLoaded, loadEntities]);
 
   return gameEntities;
 };

@@ -15,7 +15,7 @@ const DIALOGUE_LOCATION = gql`
   }
 `;
 
-const LocationDialogueButton = styled.div<{visible: boolean}>`
+const Button = styled.div<{visible: boolean}>`
   height: 60px;
   width: 60px;
   position: absolute;
@@ -39,7 +39,7 @@ const LocationDialogueButton = styled.div<{visible: boolean}>`
   }
 `;
 
-const locationDialogueButton:FC = () => {
+const LocationDialogueButton:FC = () => {
   const { loading, /* error, */ data } = useQuery(DIALOGUE_LOCATION);
   const { dialogueId, locationId } = data;
   const [near, setNear] = useState(false);
@@ -63,7 +63,7 @@ const locationDialogueButton:FC = () => {
   }
 
   return (
-    <LocationDialogueButton
+    <Button
       visible={!dialogueId && near}
       onClick={
         // withClickSound(
@@ -74,8 +74,8 @@ const locationDialogueButton:FC = () => {
       ref={button}
     >
       <RoomIcon fontSize="inherit" />
-    </LocationDialogueButton>
+    </Button>
   );
 };
 
-export default locationDialogueButton;
+export default LocationDialogueButton;

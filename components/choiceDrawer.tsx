@@ -1,11 +1,14 @@
 import { gql, useQuery } from '@apollo/client';
-import { FC, ReactNode } from 'react';
+import {
+  FC, ReactNode, useState, useEffect, useRef,
+} from 'react';
 import styled from 'styled-components';
-import { Dialogue, StateItem } from '../utils/interfaces';
-import Dialogues from '../dialogue';
+import { StateItem } from '../utils/interfaces';
 import Topics from '../data/topics';
 import Items from '../data/items';
 import { getAction } from '../utils/getters';
+
+import { useDialogueData } from '../utils/hooks';
 // import { useThemeSounds } from '../utils/hooks';
 
 const USABLE_DIALOGUE = gql`
@@ -32,7 +35,7 @@ const Drawer = styled.div<{ visible: boolean }>`
   overflow: hidden;
   filter: drop-shadow(0 0 2px rgba(0,0,0,0.2));
 
-  transition: 0.4s left, 0.4s right, 0.4s opacity;
+  transition: 0.4s left, 0.4s opacity;
 `;
 
 const Choice = styled.div`
@@ -52,41 +55,69 @@ const Choice = styled.div`
   }
 `;
 
-const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
+const ChoiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
   const { loading, /* error, */ data } = useQuery(USABLE_DIALOGUE);
-  const {
-    dialogueId, topics, items,
-  }:{
-    dialogueId: string, topics:string[], items:StateItem[],
-  } = data;
+  const { topics, items }:{ topics:string[], items:StateItem[] } = data;
+  const lastDrawer = useRef(Date.now());
+  const drawerToRemove = useRef(0);
+  const lastDialogue = useRef<string>();
+  const [drawerData, setDrawerData] = useState<Record<string, {
+    visible: boolean,
+    actions: ReactNode[],
+  }>>({
+    [lastDrawer.current]: {
+      visible: false,
+      actions: [],
+    },
+  });
   // const { playHoverSound, withClickSound } = useThemeSounds();
 
-  const actions:ReactNode[] = [];
-  if (dialogueId) {
-    const keys = dialogueId.split('/');
-    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
-      const temp = Dialogues[keys[0]][keys[1]];
-      let dialogue:Dialogue;
-      if (Array.isArray(temp)) {
-        if (keys[2]) {
-          dialogue = temp[parseInt(keys[2], 10)];
-        } else {
-          [dialogue] = temp; // index 0
-        }
-      } else {
-        dialogue = temp;
+  const dialogue = useDialogueData();
+
+  useEffect(() => {
+    let timeoutId = 0;
+    function removeOldDrawer() {
+      if (drawerToRemove.current) {
+        const removeIndex = drawerToRemove.current;
+        setDrawerData((oldDrawerData) => ({
+          ...oldDrawerData,
+          [removeIndex]: {
+            ...oldDrawerData[removeIndex],
+            visible: false,
+          },
+        }));
+        drawerToRemove.current = 0;
+        timeoutId = window.setTimeout(() => {
+          setDrawerData((oldDrawerData) => {
+            const newData = { ...oldDrawerData };
+            delete newData[removeIndex];
+            return newData;
+          });
+        }, 400);
       }
-      const { topic, item, choice } = dialogue;
+    }
+    if (!dialogue) {
+      removeOldDrawer();
+      lastDialogue.current = '';
+    } else if (dialogue.id !== lastDialogue.current) {
+      removeOldDrawer();
+    }
+
+    if (!isTalking && dialogue) {
+      const actions:ReactNode[] = [];
+      const {
+        topic, item, choice, id: dialogueId,
+      } = dialogue;
       if (choice) {
         Object.entries(choice).forEach(([name, action]) => {
           actions.push(
             <Choice
               onClick={
-                // withClickSound(
-                  getAction(action)
-                // )
-              }
-              // onMouseEnter={playHoverSound}
+                  // withClickSound(
+                    getAction(action)
+                  // )
+                }
+                // onMouseEnter={playHoverSound}
               key={`choice/${name}`}
             >
               {name}
@@ -100,11 +131,11 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
             actions.push(
               <Choice
                 onClick={
-                  // withClickSound(
-                    getAction(topic[id])
-                  // )
-                }
-                // onMouseEnter={playHoverSound}
+                    // withClickSound(
+                      getAction(topic[id])
+                    // )
+                  }
+                  // onMouseEnter={playHoverSound}
                 key={`topic/${id}`}
               >
                 &quot;
@@ -121,11 +152,11 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
             actions.push(
               <Choice
                 onClick={
-                  // withClickSound(
-                    getAction(item[id])
-                  // )
-                }
-                // onMouseEnter={playHoverSound}
+                    // withClickSound(
+                      getAction(item[id])
+                    // )
+                  }
+                  // onMouseEnter={playHoverSound}
                 key={`item/${id}`}
               >
                 {Items[id].name}
@@ -134,16 +165,58 @@ const choiceDrawer: FC<{isTalking: boolean}> = ({ isTalking }) => {
           }
         });
       }
+      if (lastDialogue.current === dialogueId) {
+        if (actions.length) {
+          const editingDrawer = drawerToRemove.current;
+          setDrawerData((oldDrawerData) => ({
+            ...oldDrawerData,
+            [editingDrawer]: {
+              visible: true,
+              actions,
+            },
+          }));
+        } else {
+          removeOldDrawer();
+        }
+      } else if (actions.length) {
+        removeOldDrawer();
+        const nextKey = Date.now();
+        const editingDrawer = lastDrawer.current;
+        setDrawerData((oldDrawerData) => ({
+          ...oldDrawerData,
+          [editingDrawer]: {
+            visible: true,
+            actions,
+          },
+          [nextKey]: {
+            visible: false,
+            actions: [],
+          },
+        }));
+        drawerToRemove.current = lastDrawer.current;
+        lastDrawer.current = nextKey;
+      }
+      lastDialogue.current = dialogueId;
     }
-  }
+    if (timeoutId) {
+      return () => clearTimeout(timeoutId);
+    }
+    return () => { /* do nothing */ };
+  }, [isTalking, dialogue, items, topics]);
+
   if (loading || !data) {
     return null;
   }
+
   return (
-    <Drawer visible={!!actions.length && !isTalking}>
-      {actions}
-    </Drawer>
+    <>
+      {Object.entries(drawerData).map(([key, objectDrawerData]) => (
+        <Drawer visible={objectDrawerData.visible} key={key}>
+          {objectDrawerData.actions}
+        </Drawer>
+      ))}
+    </>
   );
 };
 
-export default choiceDrawer;
+export default ChoiceDrawer;

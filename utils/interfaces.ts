@@ -1,4 +1,7 @@
+import { DefaultTheme } from 'styled-components';
 import { InstancedMesh, Mesh, Vector3 } from 'three';
+
+export type activateable = string | { focusId: string, dialogueId: string } | (() => void)
 
 export interface WindowSize {
   width: number | undefined
@@ -23,14 +26,14 @@ export interface LocationEntity {
   y?: number
   z: number
   focusPositionId?: string
-  activate?: string | { focusId: string, dialogueId: string } | (() => void)
+  activate?: activateable
   visible?: () => boolean
 }
 
 export interface GameEntity {
   mesh: Mesh
   getPosition: () => Vector3
-  activate?: string | { focusId: string, dialogueId: string } | (() => void)
+  activate?: activateable
   getVisibility?: () => boolean
 }
 
@@ -66,25 +69,33 @@ export interface Dialogue {
   text: (() => string) | string
   speaker?: string
   speakerFocusPositionId?: string
-  next?: string
-  nextAction?: () => void
+  next?: activateable
+  nextText?: string
   effect?: () => void
-  actions?: Array<(() => void) | string>
-  choice?: Record<string, (() => void) | string>
-  topic?: Record<string, (() => void) | string>
-  item?: Record<string, (() => void) | string>
+  actions?: activateable[]
+  choice?: Record<string, activateable>
+  topic?: Record<string, activateable>
+  item?: Record<string, activateable>
+}
+
+export interface DialogueData extends Dialogue {
+  id: string
+  nextText: string
+  speaker: string
+  isSpeech: boolean
+  theme: DefaultTheme
 }
 
 export interface Topic {
   name: string,
   description: (() => string) | string,
-  actions?: Array<(() => void) | string>
+  actions?: activateable[]
 }
 
 export interface Item {
   name: string,
   description: (() => string) | string,
-  actions?: Array<(() => void) | string>
+  actions?: activateable[]
 }
 
 export interface Skill {

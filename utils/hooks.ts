@@ -1,8 +1,12 @@
+/* eslint-disable react-hooks/exhaustive-deps */
+import { gql, useQuery } from '@apollo/client';
 import {
-  useState, useEffect, useRef, DependencyList,
+  useState, useEffect, useRef, DependencyList, useMemo,
 } from 'react';
 import { useTheme } from 'styled-components';
-import { WindowSize } from './interfaces';
+import { DialogueData, WindowSize } from './interfaces';
+import Themes from '../styles/characterThemes';
+import Dialogues from '../dialogue';
 
 export function useWindowSize():WindowSize {
   // Initialize state with undefined width/height so server and client renders match
@@ -137,4 +141,77 @@ export function useThemeSounds():{
   }, [consonant, vowel]);
 
   return { playHoverSound, withClickSound };
+}
+
+const DIALOGUE = gql`
+  query GetDialogueId {
+    dialogueId
+  }
+`;
+
+export function useDialogueData():DialogueData | null {
+  const { data } = useQuery(DIALOGUE);
+  const { dialogueId }:{ dialogueId: string } = data;
+
+  const dialogue = useMemo<null | DialogueData>(() => {
+    if (dialogueId) {
+      let sequenceLength;
+      const [speaker, textId, stringIndex] = dialogueId.split('/');
+      if (Dialogues[speaker] && Dialogues[speaker][textId]) {
+        let holder = Dialogues[speaker][textId];
+        if (Array.isArray(holder)) {
+          sequenceLength = holder.length;
+          let index = parseInt(stringIndex, 10);
+          if (Number.isNaN(index)) {
+            // setDialogue(`${dialogueId}/0`);
+            index = 0;
+            [holder] = holder;
+          } else {
+            holder = holder[index];
+          }
+          if (index < sequenceLength - 1) {
+            holder.next = `${speaker}/${textId}/${index + 1}`;
+          }
+        }
+        let speakerData:string;
+        if (holder.speaker) {
+          speakerData = holder.speaker;
+        } else {
+          speakerData = speaker;
+        }
+        let nextText = '';
+        if (holder.next !== undefined && !holder.nextText) {
+          if (holder.next === '') {
+            nextText = 'End';
+          } else if (holder.next === 'return') {
+            nextText = 'Return ⮌';
+          } else {
+            nextText = 'Continue ➤';
+          }
+        }
+        let isSpeech = true;
+        if (!speaker || speaker === 'present' || speaker === 'locations') {
+          isSpeech = false;
+        }
+        let theme = Themes.defaultTheme;
+        if (isSpeech) {
+          if (holder.speaker) {
+            theme = Themes[holder.speaker];
+          } else {
+            theme = Themes[speaker];
+          }
+        }
+        return {
+          ...holder,
+          id: dialogueId,
+          nextText,
+          speaker: speakerData,
+          isSpeech,
+          theme,
+        };
+      }
+    }
+    return null;
+  }, [dialogueId]);
+  return dialogue;
 }

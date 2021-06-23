@@ -1,13 +1,19 @@
 import {
   MutableRefObject, useEffect, useRef, useState,
 } from 'react';
+import { gql, useQuery } from '@apollo/client';
 import {
   Camera, Color, DirectionalLight, Euler, Material, Raycaster, Renderer, Scene, Vector2, Vector3,
 } from 'three';
 import { GameEntity } from '../utils/interfaces';
-import { focusId } from '../data/state';
 import { getAction } from '../utils/getters';
 import { transitionOpacity } from './transitions';
+
+const FOCUS = gql`
+  query GetFocus {
+    focusId,
+  }
+`;
 
 const useAnimationLoop = (
   renderer: Renderer | undefined,
@@ -24,13 +30,23 @@ const useAnimationLoop = (
   }[]>,
   advanceAction: () => void,
   showFps: boolean,
+  cameraDefaultPosition: Vector3 | undefined,
+  focusPositions: Record<string, Vector3> | undefined,
 ): number => {
+  const { data } = useQuery(FOCUS);
+  const { focusId } = data;
   const raycaster = useRef(new Raycaster());
   const prevTimestamp = useRef(0);
   const mouseX = useRef(0);
   const mouseY = useRef(0);
   const activate = useRef(() => { /* do nothing */ });
   const [fps, setFps] = useState(0);
+  const [cameraStopped, setCameraStopped] = useState(false);
+  const cameraStoppedRef = useRef(cameraStopped);
+
+  const advanceActionRef = useRef(advanceAction);
+  const focusIdRef = useRef(focusId);
+  const showFpsRef = useRef(showFps);
 
   function click() {
     activate.current();
@@ -40,6 +56,13 @@ const useAnimationLoop = (
     mouseX.current = event.clientX;
     mouseY.current = event.clientY;
   }
+
+  useEffect(() => { // put everything in refs so animation loop doesn't update often
+    advanceActionRef.current = advanceAction;
+    focusIdRef.current = focusId;
+    showFpsRef.current = showFps;
+    cameraStoppedRef.current = cameraStopped;
+  }, [advanceAction, focusId, showFps, cameraStopped]);
 
   useEffect(() => { // animation loop
     let animationFrameId: number;
@@ -115,12 +138,15 @@ const useAnimationLoop = (
               // is actually changed. Probably the check is off with it open?
               // eslint-disable-next-line no-param-reassign
               renderer.domElement.style.cursor = 'pointer';
-              if (focusId()) { // needs to be immediate or causes race condition with camera focus
-                activate.current = advanceAction;
+              if (focusIdRef.current) {
+                activate.current = advanceActionRef.current;
               } else {
-                activate.current = getAction(gameEntities[
-                  parseInt(intersection.object.name, 10)
-                ].activate);
+                const action = gameEntities[
+                  intersection.object.userData.index
+                ].activate;
+                if (action) {
+                  activate.current = getAction(action);
+                }
               }
             } else {
               // eslint-disable-next-line no-param-reassign
@@ -129,7 +155,7 @@ const useAnimationLoop = (
             }
           }
         }
-        if (!focusId()) { // only rotate camera if not focused
+        if (!focusIdRef.current) { // only rotate camera if not focused
           dummyCamera.setRotationFromEuler(new Euler(
             -Math.PI * (mouseY.current / window.innerHeight - 0.5) * 0.05,
             -Math.PI
@@ -138,6 +164,11 @@ const useAnimationLoop = (
             0,
             'YXZ',
           ));
+          if (cameraStoppedRef.current) {
+            setCameraStopped(false);
+          }
+        } else if (!cameraStoppedRef.current) {
+          setCameraStopped(true);
         }
         // const test = scene.getObjectByProperty('type', 'DirectionalLight');
         // if (test?.shadow.camera) {
@@ -149,7 +180,7 @@ const useAnimationLoop = (
         [prevCameraX, prevCameraY] = camera.rotation.toArray();
         prevMouseX = mouseX.current;
         prevMouseY = mouseY.current;
-        if (showFps && delta) {
+        if (showFpsRef.current && delta) {
           setFps(Math.round(1000 / delta));
         }
       }
@@ -167,7 +198,27 @@ const useAnimationLoop = (
       };
     }
     return () => { /* do nothing */ };
-  }, [renderer, gameEntities, advanceAction, showFps]);
+  }, [
+    renderer, gameEntities, camera, dummyCamera,
+    directionalLight, directionalLightTarget, scene, transitionQueue,
+  ]);
+
+  useEffect(() => { // handle camera movement on focus change
+    if (cameraDefaultPosition && focusPositions && cameraStopped) {
+      if (focusId && focusPositions[focusId]) {
+        // math
+        const destination = cameraDefaultPosition.clone()
+          .sub(focusPositions[focusId])
+          .normalize()
+          .multiplyScalar(2)
+          .add(focusPositions[focusId]);
+        dummyCamera.position.copy(destination);
+        dummyCamera.lookAt(focusPositions[focusId]);
+      } else {
+        dummyCamera.position.copy(cameraDefaultPosition);
+      }
+    }
+  }, [focusId, cameraDefaultPosition, focusPositions, dummyCamera, cameraStopped]);
 
   return fps;
 };

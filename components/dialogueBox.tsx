@@ -1,25 +1,23 @@
 import {
-  FC, useState, useEffect, useRef, SetStateAction, Dispatch,
+  FC, useState, useEffect, useRef, SetStateAction, Dispatch, useMemo,
 } from 'react';
-import styled, { ThemeProvider, DefaultTheme } from 'styled-components';
+import styled, { ThemeProvider } from 'styled-components';
 import ReactMarkdown from 'react-markdown';
 import { gql, useQuery } from '@apollo/client';
 import { Camera, Vector3 } from 'three';
 import { syllable } from 'syllable';
-import { Dialogue } from '../utils/interfaces';
 import Themes from '../styles/characterThemes';
-import Dialogues from '../dialogue';
-import { prevDialogue, setDialogue, unfocus } from '../data/state';
+import { prevDialogue, unfocus } from '../data/state';
 import { getAction, getText } from '../utils/getters';
+import { useDialogueData } from '../utils/hooks';
 
 const DIALOGUE = gql`
   query GetDialogueId {
-    dialogueId
     focusId
   }
 `;
 
-const Box = styled.div<{ visible: string }>`
+const Box = styled.div<{ visible: boolean }>`
   position: relative;
   grid-area: dialogueBox;
   display: flex;
@@ -39,7 +37,7 @@ const Box = styled.div<{ visible: string }>`
 const TextBox = styled.div<{clickThrough: boolean}>`
   flex: 1;
   font-size: 1.4em;
-  pointer-events: ${(props) => (props.clickThrough ? 'none' : 'auto')};
+  pointer-events: ${(props) => (props.clickThrough ? 'none' : 'inherit')};
 `;
 
 const ActionText = styled.span`
@@ -73,17 +71,6 @@ const Triangle = styled.div.attrs<{position: number}>(({ position }) => ({
   border-right: 10px solid transparent;
   border-bottom: 30px solid ${(props) => props.theme.backgroundColor};
 `;
-
-function isSpeech(speaker: string) {
-  if (
-    !speaker
-    || speaker === 'present'
-    || speaker === 'locations'
-  ) {
-    return false;
-  }
-  return true;
-}
 
 function setEmptyDialogue(text: string) {
   const line = text.match(/\[(?=.+?\]\(.+?\))|\]\(.+?\)/g);
@@ -144,58 +131,9 @@ const DialogueBox: FC<{
   const [text, setText] = useState('');
   // const [speakerFocusPositionId, setSpeakerFocusPositionId] = useState('');
   const [trianglePosition, setTrianglePosition] = useState(0);
-  const { dialogueId, focusId } = data;
+  const { focusId }:{ focusId: string } = data;
 
-  let wait = false;
-  let isSequence = false;
-  let sequenceLength = 0;
-  let keys = [''];
-  let dialogue: Dialogue = {
-    text: '',
-  };
-  let theme: DefaultTheme = {
-    backgroundColor: 'transparent',
-    color: 'transparent',
-  };
-  let continueText;
-
-  if (dialogueId) {
-    keys = dialogueId.split('/');
-    if (Dialogues[keys[0]] && Dialogues[keys[0]][keys[1]]) {
-      const temp = Dialogues[keys[0]][keys[1]];
-      if (Array.isArray(temp)) {
-        isSequence = true;
-        sequenceLength = temp.length;
-        if (keys.length !== 3) { // no index
-          keys.push('0');
-          setDialogue(`${dialogueId}/0`);
-          wait = true;
-        }
-        dialogue = temp[parseInt(keys[2], 10)];
-      } else {
-        dialogue = temp;
-      }
-      if (dialogue.next === '') {
-        continueText = 'End';
-      } else if (dialogue.next === 'return') {
-        continueText = 'Return ⮌';
-      } else if (dialogue.next || (isSequence && parseInt(keys[2], 10) < sequenceLength)) {
-        continueText = 'Continue ➤';
-      }
-      if (isSpeech(keys[0])) {
-        if (dialogue.speaker) {
-          theme = Themes[dialogue.speaker];
-        } else {
-          theme = Themes[keys[0]];
-        }
-      } else {
-        theme = {
-          backgroundColor: 'white',
-          color: 'black',
-        };
-      }
-    }
-  }
+  const dialogue = useDialogueData();
 
   // load all blips
   useEffect(() => {
@@ -210,10 +148,9 @@ const DialogueBox: FC<{
   }, []);
 
   useEffect(() => {
-    if (dialogueId) {
-      if (dialogue.effect && !wait) { // wait will make it run twice
-        dialogue.effect();
-      }
+    if (dialogue && dialogue.effect) {
+      dialogue.effect();
+    // test for if speaker changes persist
     //   if (typeof dialogue.speakerFocusPositionId === 'string') {
     //     setSpeakerFocusPositionId(dialogue.speakerFocusPositionId);
     //   } else if (!(isSequence && parseInt(keys[2], 10) > 0)) {
@@ -222,7 +159,7 @@ const DialogueBox: FC<{
     // } else {
     //   setSpeakerFocusPositionId('');
     }
-  }, [dialogueId]);
+  }, [dialogue]);
 
   useEffect(() => {
     let animationFrameId = 0;
@@ -230,62 +167,55 @@ const DialogueBox: FC<{
     const position = new Vector3();
 
     function animate() {
-      position.copy(focusPositions[dialogue.speakerFocusPositionId || focusId]);
-      position.project(camera);
-      setTrianglePosition(position.x);
-      if (
-        Math.abs(position.x - prevPositionX) > 0.00001
-      ) {
-        prevPositionX = position.x;
-        animationFrameId = requestAnimationFrame(animate);
+      if (dialogue) {
+        position.copy(focusPositions[dialogue.speakerFocusPositionId || focusId]);
+        position.project(camera);
+        setTrianglePosition(position.x);
+        if (
+          position.x === prevPositionX // sometimes it won't change for some reason
+          || Math.abs(position.x - prevPositionX) > 0.00001
+        ) {
+          prevPositionX = position.x;
+          animationFrameId = requestAnimationFrame(animate);
+        }
       }
     }
-    if (focusId && dialogue.speakerFocusPositionId !== '') {
+    if (focusId && dialogue && dialogue.speakerFocusPositionId !== '') {
       animationFrameId = requestAnimationFrame(animate);
       return () => {
         cancelAnimationFrame(animationFrameId);
       };
     }
     return () => { /* do nothing */ };
-  }, [dialogueId, focusId, focusPositions]);
+  }, [focusId, focusPositions, camera, dialogue]);
 
   useEffect(() => { // handle advance
-    if (dialogueId) { // changed to new dialogue
+    if (dialogue) { // changed to new dialogue
       if (isTalking) {
         setAdvance(() => () => {
           endDialogue.current = true;
         });
-      } else if (isSequence && parseInt(keys[2], 10) < sequenceLength - 1) {
-        setAdvance(() => () => {
-          keys[2] = `${parseInt(keys[2], 10) + 1}`;
-          setDialogue(keys.join('/'));
-        });
-      } else if (dialogue.nextAction) {
-        const { nextAction } = dialogue;
-        setAdvance(() => nextAction);
-      } else if (typeof dialogue.next === 'string') {
+      } else if (dialogue.next || dialogue.next === '') {
         const { next } = dialogue;
         if (next === '') {
           setAdvance(() => unfocus);
         } else if (next === 'return') {
           setAdvance(() => prevDialogue);
         } else {
-          setAdvance(() => () => {
-            setDialogue(next || '');
-          });
+          setAdvance(() => getAction(next));
         }
       }
     } else { // changed to no dialogue
       setAdvance(() => () => { /* do nothing */ });
     }
-  }, [dialogueId, isTalking]);
+  }, [dialogue, isTalking, setAdvance]);
 
   useEffect(() => { // handle text scroll
     let newText = '';
     let nextNewText = '';
     let char = '';
     let nextChar = '';
-    const oldText = getText(dialogue.text);
+    let oldText = '';
     let start: number;
     let id: number;
     let index = 0;
@@ -293,58 +223,61 @@ const DialogueBox: FC<{
     let prevSyllableCount = 0;
     let punctuationDelay = 0;
     function animate(timestamp: number) {
-      if (start === undefined) {
-        start = timestamp;
-      }
-      // ready for new letter
-      if ((timestamp - start) / speed > nextTime) {
-        // have next character ready too so that syllable can make better predictions
-        newText = nextNewText;
-        char = nextChar;
-        const processed = processNextChar(nextNewText, oldText, index);
-        nextNewText = processed.newText;
-        nextChar = processed.char;
-        index = processed.nextIndex;
-        if (char) {
-          if (char !== ' ') { // trailing spaces cause trouble
-            if (/[.?!]/.test(char)) {
-              punctuationDelay = 6;
-            } else if (/,/.test(char)) {
-              punctuationDelay = 3;
-            }
-            if (syllable(nextNewText) > prevSyllableCount && voices.current[keys[0]]) {
-              const { vowel, consonant } = voices.current[dialogue.speaker || keys[0]];
-              if (/[aeiouy]/.test(char.toLowerCase())) {
-                vowel.pause();
-                vowel.currentTime = 0;
-                vowel.play();
-              } else {
-                consonant.pause();
-                consonant.currentTime = 0;
-                consonant.play();
+      if (dialogue) {
+        if (start === undefined) {
+          start = timestamp;
+        }
+        // ready for new letter
+        if ((timestamp - start) / speed > nextTime) {
+          // have next character ready too so that syllable can make better predictions
+          newText = nextNewText;
+          char = nextChar;
+          const processed = processNextChar(nextNewText, oldText, index);
+          nextNewText = processed.newText;
+          nextChar = processed.char;
+          index = processed.nextIndex;
+          if (char) {
+            if (char !== ' ') { // trailing spaces cause trouble
+              if (/[.?!]/.test(char)) {
+                punctuationDelay = 6;
+              } else if (/,/.test(char)) {
+                punctuationDelay = 3;
               }
-              prevSyllableCount = syllable(nextNewText);
+              if (syllable(nextNewText) > prevSyllableCount && voices.current[dialogue.speaker]) {
+                const { vowel, consonant } = voices.current[dialogue.speaker];
+                if (/[aeiouy]/.test(char.toLowerCase())) {
+                  vowel.pause();
+                  vowel.currentTime = 0;
+                  vowel.play();
+                } else {
+                  consonant.pause();
+                  consonant.currentTime = 0;
+                  consonant.play();
+                }
+                prevSyllableCount = syllable(nextNewText);
+              }
+              setText(newText);
+              nextTime += 1 + punctuationDelay;
+              punctuationDelay = 0;
+            } else {
+              nextTime += 1;
             }
-            setText(newText);
-            nextTime += 1 + punctuationDelay;
-            punctuationDelay = 0;
-          } else {
-            nextTime += 1;
           }
         }
-      }
-      if (oldText.charAt(index - 1) && !endDialogue.current) {
-        // the actual index is one behind the one we use for syllables
-        id = requestAnimationFrame(animate);
-      } else {
-        setText(oldText);
-        setIsTalking(false);
-        endDialogue.current = false;
+        if (oldText.charAt(index - 1) && !endDialogue.current) {
+          // the actual index is one behind the one we use for syllables
+          id = requestAnimationFrame(animate);
+        } else {
+          setText(oldText);
+          setIsTalking(false);
+          endDialogue.current = false;
+        }
       }
     }
 
-    if (isSpeech(keys[0])) {
-      if (!wait) { // need to wait or else runs back to back
+    if (dialogue) {
+      if (dialogue.isSpeech) {
+        oldText = getText(dialogue.text);
         newText = setEmptyDialogue(oldText);
         const processed = processNextChar(newText, oldText, 0);
         nextNewText = processed.newText;
@@ -357,25 +290,21 @@ const DialogueBox: FC<{
         }
         // runs if immediately completed because only one character
         setText(dialogue.text);
+      } else { // is not speech
+        setText(dialogue.text);
       }
-    } else { // is not speech
-      setText(dialogue.text);
     }
     return () => { /* do nothing */ };
-  }, [dialogueId]);
+  }, [dialogue, setIsTalking]);
 
-  if (loading || !data) {
-    return null;
-  }
-
-  const components = {
+  const components = useMemo(() => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     a(props: any) { // this type is broken
       const { children, href } = props;
       let action = () => { /* do nothing */ };
       if (isTalking) {
         action = advance;
-      } else if (dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
+      } else if (dialogue && dialogue.actions && dialogue.actions[parseInt(href, 10)]) {
         action = getAction(dialogue.actions[parseInt(href, 10)]);
       }
       return (
@@ -385,20 +314,24 @@ const DialogueBox: FC<{
       );
     },
     img: () => '!',
-  };
+  }), [dialogue, isTalking, advance]);
+
+  if (loading || !data) {
+    return null;
+  }
 
   return (
-    <ThemeProvider theme={theme}>
-      <Box visible={dialogueId} onClick={isTalking ? advance : () => { /* do nothing */ }}>
-        {dialogue.speakerFocusPositionId !== '' && <Triangle position={trianglePosition} />}
-        <TextBox clickThrough={isTalking || !dialogueId}>
+    <ThemeProvider theme={(dialogue && dialogue.theme) || Themes.defaultTheme}>
+      <Box visible={!!dialogue} onClick={isTalking ? advance : () => { /* do nothing */ }}>
+        {dialogue && dialogue.speakerFocusPositionId !== '' && <Triangle position={trianglePosition} />}
+        <TextBox clickThrough={isTalking}>
           <ReactMarkdown components={components} disallowedElements={disallowed}>
             {text}
           </ReactMarkdown>
         </TextBox>
-        {continueText && (
+        {dialogue && dialogue.nextText && (
           <ContinueBox onClick={advance}>
-            {continueText}
+            {dialogue.nextText}
           </ContinueBox>
         )}
       </Box>

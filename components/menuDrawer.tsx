@@ -12,7 +12,7 @@ import Topics from '../data/topics';
 import Items from '../data/items';
 import * as CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
-import { StateItem } from '../utils/interfaces';
+import { activateable, StateItem } from '../utils/interfaces';
 import { getText, getAction } from '../utils/getters';
 import { useThemeSounds } from '../utils/hooks';
 // import NotificationDot from './notificationDot';
@@ -295,11 +295,11 @@ const MenuDrawer: FC = () => {
     }
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [offside, activeTab]);
+  }, [offside, activeTab, withClickSound]);
 
   let title = '';
   let text = '';
-  let actionList: (string | (() => void))[];
+  let actionList: activateable[];
   const keys = infoId.split('/');
   if (keys[0] === 'topic') {
     title = Topics[keys[1]].name;

@@ -21,10 +21,16 @@ const kalvin = {
   consonant: '/assets/kalvin/kalvinConsonant.wav',
 };
 
+const defaultTheme = {
+  backgroundColor: 'white',
+  color: 'black',
+};
+
 const themes:Record<string, DefaultTheme> = {
   testprincess,
   hyde,
   kalvin,
+  defaultTheme,
 };
 
 export default themes;
