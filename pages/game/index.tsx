@@ -18,7 +18,7 @@ import {
 import { useQuery, gql } from '@apollo/client';
 import path from 'path';
 import fs from 'fs';
-// import zlib from 'zlib';
+import zlib from 'zlib';
 import JSONB from 'json-buffer';
 import { PNG } from 'pngjs';
 import { useWindowSizeEffect } from '../../utils/hooks';
@@ -87,14 +87,9 @@ const Game: FC<{
           night: compressedNight,
           width, height,
         } = compressedData;
-        // const original = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedOriginal)))
-        // const sunset = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedSunset)));
-        // const night = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedNight)));
-        const test = JSONB.parse(compressedSunset);
-        // checkBuffer(test);
-        const original = new Uint8ClampedArray(JSONB.parse(compressedOriginal));
-        const sunset = new Uint8ClampedArray(test);
-        const night = new Uint8ClampedArray(JSONB.parse(compressedNight));
+        const original = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedOriginal)));
+        const sunset = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedSunset)));
+        const night = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedNight)));
         holder[id] = {
           original,
           sunset,
@@ -306,16 +301,15 @@ const Game: FC<{
 
 export default Game;
 
-// const asyncDeflate = async (buffer:Buffer) => new Promise<Buffer>((resolve, reject) => {
-//   zlib.deflate(buffer, (error, data) => {
-//     if (error) {
-//       reject(error);
-//     } else {
-//       console.log(buffer.length, data.length);
-//       resolve(data);
-//     }
-//   });
-// });
+const asyncDeflate = async (buffer:Buffer) => new Promise<Buffer>((resolve, reject) => {
+  zlib.deflate(buffer, (error, data) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve(data);
+    }
+  });
+});
 
 export async function getStaticProps(): Promise<{
   props: {
@@ -332,18 +326,11 @@ export async function getStaticProps(): Promise<{
     const png = fs.createReadStream(path.join(process.cwd(), 'public', background)).pipe(new PNG());
     return new Promise<[string, CompressedFilteredBackground]>((resolve) => {
       png.on('parsed', async () => {
-        // const [original, sunset, night] = await Promise.all([
-        //   asyncDeflate(png.data),
-        //   asyncDeflate(colorLookup(LateSunset, png.data)),
-        //   asyncDeflate(colorLookup(nightfromday, png.data)),
-        // ]);
         const [original, sunset, night] = await Promise.all([
-          png.data,
-          colorLookup(LateSunset, png.data),
-          colorLookup(nightfromday, png.data),
+          asyncDeflate(png.data),
+          asyncDeflate(colorLookup(LateSunset, png.data)),
+          asyncDeflate(colorLookup(nightfromday, png.data)),
         ]);
-        // console.log('sunset', ...checkBuffer(sunset));
-        // console.log('night', ...checkBuffer(night));
         resolve([id, {
           original: JSONB.stringify(original),
           sunset: JSONB.stringify(sunset),
