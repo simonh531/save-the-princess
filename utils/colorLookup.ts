@@ -1,3 +1,5 @@
+import { readFile } from 'fs/promises';
+import path from 'path';
 import { LookupTable } from './interfaces';
 
 const getDecimal = (number: number) => {
@@ -111,7 +113,8 @@ const tetrahedralInterpolation = (
 
 export const makeLookupTable = async (url: string):Promise<LookupTable> => {
   const extension = url.split('.').pop() || 'error';
-  const text = await (await (await fetch(url)).blob()).text();
+  const text = await readFile(path.join(process.cwd(), 'public', 'assets', url), 'utf-8');
+
   const textLines = text.split('\n');
   let dimension = 17; // default
   let padding = 0;
@@ -159,10 +162,10 @@ export const makeLookupTable = async (url: string):Promise<LookupTable> => {
 };
 
 export default function colorLookup(
-  lookupTable: LookupTable, data: Uint8ClampedArray,
-):Uint8ClampedArray {
+  lookupTable: LookupTable, data: Buffer,
+):Buffer {
   const dimension = lookupTable.array.length;
-  const newData = new Uint8ClampedArray(data.length);
+  const holder = new Uint8ClampedArray(data.length);
   if (lookupTable.type === 'CUBE') {
     for (let i = 0; i < data.length; i += 4) {
       const rIndex = data[i] / dimension;
@@ -172,10 +175,11 @@ export default function colorLookup(
       const [newR, newG, newB] = tetrahedralInterpolation(
         lookupTable.array, rIndex, gIndex, bIndex,
       );
-      newData[i] = Math.round(newR);
-      newData[i + 1] = Math.round(newG);
-      newData[i + 2] = Math.round(newB);
-      newData[i + 3] = 255;
+
+      holder[i] = Math.round(newR);
+      holder[i + 1] = Math.round(newG);
+      holder[i + 2] = Math.round(newB);
+      holder[i + 3] = 255;
     }
   } else if (lookupTable.type === '3DL' && lookupTable.indices) {
     for (let i = 0; i < data.length; i += 4) {
@@ -186,11 +190,13 @@ export default function colorLookup(
       const [newR, newG, newB] = tetrahedralInterpolation(
         lookupTable.array, rIndex, gIndex, bIndex,
       ); // range 4095 to 255
-      newData[i] = Math.round((newR + 1) / 16 - 1);
-      newData[i + 1] = Math.round((newG + 1) / 16 - 1);
-      newData[i + 2] = Math.round((newB + 1) / 16 - 1);
-      newData[i + 3] = 255;
+
+      holder[i] = Math.round((newR + 1) / 16 - 1);
+      holder[i + 1] = Math.round((newG + 1) / 16 - 1);
+      holder[i + 2] = Math.round((newB + 1) / 16 - 1);
+      holder[i + 3] = 255;
     }
   }
+  const newData = Buffer.from(holder);
   return newData;
 }

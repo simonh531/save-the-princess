@@ -1,14 +1,10 @@
 /* eslint-disable no-param-reassign */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
-  // MeshStandardMaterial,
   Scene,
   Vector3,
-  PerspectiveCamera,
   Object3D,
-  DirectionalLight,
-  Camera,
 } from 'three';
 import { cleanTiles } from './meshCleanup';
 import { ScaledInstancedMesh } from '../utils/interfaces';
@@ -27,28 +23,19 @@ const LOCATION = gql`
 
 const useLoadWalls = (
   scene: Scene,
-  camera: PerspectiveCamera,
-  dummyCamera: Camera,
-  light: DirectionalLight,
   cubeUnit: number, // possibly moved to location file
   depth: number, // possibly moved to location file
-):Vector3 | undefined => {
+):boolean => {
   const { data } = useQuery(LOCATION);
   const { locationId } = data;
-  const [cameraDefaultPosition, setCameraDefaultPosition] = useState<Vector3 | undefined>();
+  const [loaded, setLoaded] = useState(false);
 
-  async function loadWalls() {
+  const loadWalls = useCallback(async () => {
     const location = Locations[locationId];
     const cameraPosition = new Vector3();
     const {
       mapWidth, mapDepth, cameraX, cameraZ, walls,
     } = location;
-
-    light.shadow.camera.top = (mapDepth * cubeUnit) / 2;
-    light.shadow.camera.right = (mapWidth * cubeUnit) / 2;
-    light.shadow.camera.bottom = -(mapDepth * cubeUnit) / 2;
-    light.shadow.camera.left = -(mapWidth * cubeUnit) / 2;
-    light.shadow.camera.updateProjectionMatrix();
 
     const tileMeshes:Record<string, Promise<ScaledInstancedMesh>> = {};
 
@@ -163,14 +150,12 @@ const useLoadWalls = (
       (cameraZ - (mapWidth / 2) + 0.5) * cubeUnit,
     );
 
-    setCameraDefaultPosition(cameraPosition);
-    dummyCamera.position.copy(cameraPosition);
-    camera.position.copy(cameraPosition);
+    setLoaded(true);
     return tileMeshes;
-  }
+  }, [cubeUnit, depth, locationId, scene]);
 
   useEffect(() => {
-    setCameraDefaultPosition(undefined);
+    setLoaded(false);
     if (Locations[locationId]) {
       const tiles = loadWalls();
       return () => {
@@ -178,9 +163,9 @@ const useLoadWalls = (
       };
     }
     return () => { /* do nothing */ };
-  }, [locationId]);
+  }, [loadWalls, locationId]);
 
-  return cameraDefaultPosition;
+  return loaded;
 };
 
 export default useLoadWalls;

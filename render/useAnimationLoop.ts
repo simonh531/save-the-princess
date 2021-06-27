@@ -3,7 +3,8 @@ import {
 } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
-  Camera, Color, DirectionalLight, Euler, Material, Raycaster, Renderer, Scene, Vector2, Vector3,
+  Camera, Color, DirectionalLight, Euler, Material,
+  PerspectiveCamera, Raycaster, Renderer, Scene, Vector2, Vector3,
 } from 'three';
 import { GameEntity } from '../utils/interfaces';
 import { getAction } from '../utils/getters';
@@ -18,7 +19,7 @@ const FOCUS = gql`
 const useAnimationLoop = (
   renderer: Renderer | undefined,
   scene: Scene,
-  camera: Camera,
+  camera: PerspectiveCamera,
   dummyCamera: Camera,
   directionalLight: DirectionalLight,
   directionalLightTarget: { position: Vector3; color: Color; },
@@ -65,6 +66,8 @@ const useAnimationLoop = (
   }, [advanceAction, focusId, showFps, cameraStopped]);
 
   useEffect(() => { // animation loop
+    const euler = new Euler(0, 0, 0, 'YXZ');
+    const vector = new Vector3();
     let animationFrameId: number;
     let prevPositionX = 0;
     let prevPositionY = 0;
@@ -156,14 +159,23 @@ const useAnimationLoop = (
           }
         }
         if (!focusIdRef.current) { // only rotate camera if not focused
-          dummyCamera.setRotationFromEuler(new Euler(
-            -Math.PI * (mouseY.current / window.innerHeight - 0.5) * 0.05,
-            -Math.PI
-            * (mouseX.current / window.innerWidth - 0.5)
-            * (window.innerHeight / window.innerWidth),
-            0,
-            'YXZ',
-          ));
+          const { cameraVerticalRange, cameraHorizontalRange, cameraAngle } = dummyCamera.userData;
+          let x = 0;
+          let y = 0;
+          if (cameraVerticalRange) {
+            x = -2 * (mouseY.current / window.innerHeight - 0.5)
+              * (cameraVerticalRange - camera.fov * (Math.PI / 360));
+          }
+          if (cameraHorizontalRange) {
+            y = -2 * (mouseX.current / window.innerWidth - 0.5) * (cameraHorizontalRange
+              - Math.atan(camera.aspect * Math.tan(camera.fov * (Math.PI / 360))) // calculate h fov
+            );
+          }
+          vector.set(x, y, 0);
+          if (cameraAngle) {
+            vector.add(cameraAngle);
+          }
+          dummyCamera.setRotationFromEuler(euler.setFromVector3(vector));
           if (cameraStoppedRef.current) {
             setCameraStopped(false);
           }

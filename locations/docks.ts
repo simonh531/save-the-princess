@@ -1,13 +1,15 @@
 import { Location } from '../utils/interfaces';
 
 const test:Location = {
-  background: '/assets/docks/docks.jpg',
+  background: '/assets/docks/docks.png',
   groundLight: 0x000080,
   skyLight: 0x87cefa,
   mapWidth: 5,
   mapDepth: 5,
   cameraX: 2,
   cameraZ: 4,
+  cameraHorizontalRange: Math.PI,
+  cameraVerticalRange: Math.PI / 4,
   direction: 0,
   horizontalPlanes: [],
   entities: [
@@ -18,7 +20,7 @@ const test:Location = {
       focusPositionId: 'hyde',
       activate: {
         focusId: 'hyde',
-        dialogueId: 'hyde/intro',
+        dialogueId: 'hyde/changeTime',
       },
     },
     {

@@ -43,6 +43,7 @@ export interface Tile {
   geometry?: string
   repeat?: number
   clearcoat?: number
+  roughness?: number
 }
 
 export interface Plane {
@@ -58,6 +59,9 @@ export interface Location {
   mapDepth: number
   cameraX: number
   cameraZ: number
+  cameraAngle?: Vector3
+  cameraHorizontalRange?: number
+  cameraVerticalRange?: number
   direction: number
   walls?: Plane
   horizontalPlanes: Plane[]
@@ -107,10 +111,20 @@ export interface StateItem {
   quantity: number
 }
 
-export interface BackgroundVersions {
-  default: ImageData,
-  sunset: ImageData,
-  night: ImageData,
+export interface CompressedFilteredBackground {
+  original: string
+  sunset: string
+  night: string
+  width: number
+  height: number
+}
+
+export interface FilteredBackground {
+  original: Uint8ClampedArray
+  sunset: Uint8ClampedArray
+  night: Uint8ClampedArray
+  width: number
+  height: number
 }
 
 export interface LookupTable {

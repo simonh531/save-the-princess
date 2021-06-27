@@ -23,7 +23,7 @@ const useSunMoon = (
   useEffect(() => { // handle sun/moon position/strength
     const dayTime = time % 24;
     const lightStrengthFraction = dayTime / 24;
-    const lightStrength = 0.12 + 0.48 * Math.sin(lightStrengthFraction * Math.PI);
+    const lightStrength = 0.05 + 0.55 * Math.sin(lightStrengthFraction * Math.PI);
     const origin = directionalLight.target.position.clone();
     if (dayTime >= 6 && dayTime <= 18) { // sun time
       setIsDay(true);
@@ -62,7 +62,10 @@ const useSunMoon = (
     }
     hemisphereLight.intensity = lightStrength * 0.9;
     ambientLight.intensity = lightStrength * 0.8;
-  }, [time]); // isDay will never change while time remains the same
+  }, [
+    ambientLight, directionalLight, directionalLightTarget, hemisphereLight,
+    isDay, time,
+  ]); // isDay will never change while time remains the same
 };
 
 export default useSunMoon;

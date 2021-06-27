@@ -7,6 +7,8 @@ import {
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { ScaledInstancedMesh, Tile } from '../utils/interfaces';
 
+const envMapIntensity = 0.15;
+
 async function createInstancedMeshes(
   tile: Tile,
   count: number, // different because is not being set
@@ -15,7 +17,7 @@ async function createInstancedMeshes(
   depth: number,
   cubeUnit: number,
 ): Promise<ScaledInstancedMesh> {
-  let wallMap;
+  let map;
   let geometry;
   let scale;
   const loader = new TextureLoader();
@@ -27,7 +29,7 @@ async function createInstancedMeshes(
         loader.loadAsync(tile.url),
       ]);
       let svgResult;
-      [svgResult, wallMap] = promiseData;
+      [svgResult, map] = promiseData;
       const shape = svgResult.paths[0].toShapes(true);
       geometry = new ExtrudeGeometry(shape, {
         depth,
@@ -42,29 +44,29 @@ async function createInstancedMeshes(
         scale = cubeUnit / y;
         x = geometry.boundingBox.max.x * 2;
       }
-      wallMap.wrapS = RepeatWrapping;
-      wallMap.wrapT = RepeatWrapping;
-      wallMap.repeat.set(1 / x, 1 / y);
-      wallMap.flipY = false;
+      map.wrapS = RepeatWrapping;
+      map.wrapT = RepeatWrapping;
+      map.repeat.set(1 / x, 1 / y);
+      map.flipY = false;
     } else {
-      wallMap = await loader.loadAsync(tile.url);
+      map = await loader.loadAsync(tile.url);
       geometry = new BoxGeometry(cubeUnit, cubeUnit, depth);
       if (tile.repeat) {
-        wallMap.wrapS = RepeatWrapping;
-        wallMap.wrapT = RepeatWrapping;
-        wallMap.repeat.set(tile.repeat, tile.repeat);
+        map.wrapS = RepeatWrapping;
+        map.wrapT = RepeatWrapping;
+        map.repeat.set(tile.repeat, tile.repeat);
       }
     }
   } else {
-    wallMap = await loader.loadAsync(tile);
+    map = await loader.loadAsync(tile);
     geometry = new BoxGeometry(cubeUnit, cubeUnit, depth);
   }
-  wallMap.encoding = sRGBEncoding;
+  map.encoding = sRGBEncoding;
   let material: MeshStandardMaterial | MeshStandardMaterial[];
   const standardSettings = {
-    map: wallMap,
+    map,
     transparent: typeof tile === 'string' || !tile.geometry,
-    envMapIntensity: 0.15,
+    envMapIntensity,
   };
   if (tile.clearcoat) {
     const physicalSettings = {
@@ -78,7 +80,7 @@ async function createInstancedMeshes(
   if (tile.colors) {
     material = [
       material,
-      ...tile.colors.map((color) => new MeshPhysicalMaterial({ color, envMapIntensity: 0.1 })),
+      ...tile.colors.map((color) => new MeshPhysicalMaterial({ color, envMapIntensity })),
     ];
   }
   const mesh = new InstancedMesh(

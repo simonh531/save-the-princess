@@ -34,6 +34,7 @@ function useEnvMap(
       envMap.current.encoding = sRGBEncoding;
       // eslint-disable-next-line no-param-reassign
       scene.environment = envMap.current;
+      pmremGenerator.dispose();
 
       // const testplane = new PlaneGeometry(3, 3);
       // const testmaterial = new MeshBasicMaterial({
@@ -41,10 +42,9 @@ function useEnvMap(
       // });
       // const testMesh = new Mesh(testplane, testmaterial);
       // scene.add(testMesh);
-      // pmremGenerator.dispose();
       // return () => cleanup(testMesh);
     }
-    return () => { /* do nothing */ };
+    // return () => { /* do nothing */ };
   }, [renderer, scene, everythingLoaded, time, locationId]);
 }
 

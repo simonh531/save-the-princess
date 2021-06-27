@@ -1,5 +1,5 @@
 /* eslint-disable no-param-reassign */
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
   // MeshStandardMaterial,
@@ -107,7 +107,7 @@ const useLoadPlanes = (
   const { locationId } = data;
   const [loaded, setLoaded] = useState(false);
 
-  async function loadPlanes() {
+  const loadPlanes = useCallback(async () => {
     const location = Locations[locationId];
     const { mapWidth, mapDepth, horizontalPlanes } = location;
     const planes = horizontalPlanes.map((plane, index) => {
@@ -124,7 +124,7 @@ const useLoadPlanes = (
     });
     setLoaded(true);
     return planes;
-  }
+  }, [cubeUnit, depth, locationId, scene]);
 
   useEffect(() => {
     setLoaded(false);
@@ -135,7 +135,7 @@ const useLoadPlanes = (
       };
     }
     return () => { /* do nothing */ };
-  }, [locationId]);
+  }, [locationId, loadPlanes]);
 
   return loaded;
 };

@@ -3,8 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   CanvasTexture, Scene, WebGLCubeRenderTarget, WebGLRenderer, sRGBEncoding,
 } from 'three';
-import Locations from '../locations';
-import { BackgroundVersions } from '../utils/interfaces';
+import { FilteredBackground } from '../utils/interfaces';
 
 const TIMELOCATION = gql`
   query GetTimeLocation {
@@ -16,7 +15,7 @@ const TIMELOCATION = gql`
 function useBackgroundShading(
   renderer: WebGLRenderer | undefined,
   scene: Scene,
-  filteredBackgrounds: Record<string, BackgroundVersions>,
+  filteredBackgrounds: Record<string, FilteredBackground>,
 ):boolean {
   const { data } = useQuery(TIMELOCATION);
   const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
@@ -37,6 +36,7 @@ function useBackgroundShading(
     }
     // eslint-disable-next-line no-param-reassign
     scene.background = backgroundRenderTarget.current.texture;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene]);
 
   useEffect(() => { // handle background shading
@@ -46,30 +46,24 @@ function useBackgroundShading(
       && canvasCtx
       && canvasTexture
       && backgroundRenderTarget
-      && Locations[locationId]
-      && Locations[locationId].background
-      && filteredBackgrounds[Locations[locationId].background]
+      && filteredBackgrounds[locationId]
     ) {
-      const { background } = Locations[locationId];
       const dayTime = time % 24;
+      const {
+        original, sunset, night, width, height,
+      } = filteredBackgrounds[locationId];
+      canvasCtx.canvas.width = width;
+      canvasCtx.canvas.height = height;
       if (dayTime >= 6 && dayTime <= 18) { // sun time
         const fraction = (dayTime - 6) / 12;
         const strength = (1 - Math.sin(fraction * Math.PI));
-        canvasCtx.canvas.width = filteredBackgrounds[background].night.width;
-        canvasCtx.canvas.height = filteredBackgrounds[background].night.height;
-        canvasCtx.putImageData(
-          filteredBackgrounds[background].default,
-          0, 0,
-        );
+        canvasCtx.putImageData(new ImageData(original, width), 0, 0);
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         if (tempCtx) {
           tempCanvas.width = canvasCtx.canvas.width;
           tempCanvas.height = canvasCtx.canvas.height;
-          tempCtx.putImageData(
-            filteredBackgrounds[background].sunset,
-            0, 0,
-          );
+          tempCtx.putImageData(new ImageData(sunset, width), 0, 0);
           canvasCtx.globalCompositeOperation = 'source-over';
           canvasCtx.globalAlpha = strength;
           canvasCtx.drawImage(tempCanvas, 0, 0);
@@ -82,12 +76,7 @@ function useBackgroundShading(
       } else { // moon time
         const fraction = ((dayTime + 6) % 12) / 12;
         const strength = Math.sin(fraction * Math.PI) * 0.85;
-        canvasCtx.canvas.width = filteredBackgrounds[background].night.width;
-        canvasCtx.canvas.height = filteredBackgrounds[background].night.height;
-        canvasCtx.putImageData(
-          filteredBackgrounds[background].night,
-          0, 0,
-        );
+        canvasCtx.putImageData(new ImageData(night, width), 0, 0);
         canvasCtx.globalCompositeOperation = 'darken';
         canvasCtx.globalAlpha = strength;
         const gradient = canvasCtx.createLinearGradient(0, 0, 0, canvasCtx.canvas.height);

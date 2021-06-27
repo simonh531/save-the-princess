@@ -1,5 +1,5 @@
 import {
-  FC, useState, useEffect, useRef,
+  FC, useState, useEffect, useRef, useMemo,
 } from 'react';
 import styled from 'styled-components';
 import {
@@ -16,18 +16,21 @@ import {
   Material,
 } from 'three';
 import { useQuery, gql } from '@apollo/client';
+import path from 'path';
+import fs from 'fs';
+// import zlib from 'zlib';
+import JSONB from 'json-buffer';
+import { PNG } from 'pngjs';
 import { useWindowSizeEffect } from '../../utils/hooks';
-
-import useAnimationLoop from '../../render/useAnimationLoop';
-import useMakeLookupTables from '../../render/useMakeLookupTables';
+import locationList from '../../locations';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
 import MenuDrawer from '../../components/menuDrawer';
 import ChoiceDrawer from '../../components/choiceDrawer';
 import LocationDialogueButton from '../../components/locationDialogueButton';
+import useAnimationLoop from '../../render/useAnimationLoop';
 import useSunMoon from '../../render/useSunMoon';
-import useFilterBackground from '../../render/useFilterBackground';
 import useLoadWalls from '../../render/useLoadWalls';
 import useLoadEntities from '../../render/useLoadEntities';
 import useLoadLights from '../../render/useLoadLights';
@@ -35,6 +38,9 @@ import useLoadPlanes from '../../render/useLoadPlanes';
 import useBackgroundShading from '../../render/useBackgroundShading';
 import useEnvMap from '../../render/useEnvMap';
 import useFocusPositions from '../../render/useFocusPositions';
+import useCameraPosition from '../../render/useCameraPosition';
+import colorLookup, { makeLookupTable } from '../../utils/colorLookup';
+import { CompressedFilteredBackground, FilteredBackground } from '../../utils/interfaces';
 
 const GAME_STATE = gql`
   query GetGameState {
@@ -59,17 +65,48 @@ const FPS = styled.span`
   color: red;
 `;
 
-const defaultAction = () => () => { /* do nothing */ };
-
 // units are meters let's say
 const depth = 0.1;
 const cubeUnit = 3;
 
-const Game: FC = () => {
-  const [advanceAction, setAdvanceAction] = useState<() => void>(defaultAction);
+const Game: FC<{
+  compressedFilteredBackgrounds:Record<string, CompressedFilteredBackground>
+}> = ({ compressedFilteredBackgrounds }) => {
+  const [advanceAction, setAdvanceAction] = useState(() => () => { /* do nothing */ });
   const { loading, /* error, */ data } = useQuery(GAME_STATE);
   const [showFps, setShowFps] = useState(false);
   const { checks } = data;
+
+  const filteredBackgrounds = useMemo(
+    () => {
+      const holder:Record<string, FilteredBackground> = {};
+      Object.entries(compressedFilteredBackgrounds).forEach(([id, compressedData]) => {
+        const {
+          original: compressedOriginal,
+          sunset: compressedSunset,
+          night: compressedNight,
+          width, height,
+        } = compressedData;
+        // const original = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedOriginal)))
+        // const sunset = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedSunset)));
+        // const night = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedNight)));
+        const test = JSONB.parse(compressedSunset);
+        // checkBuffer(test);
+        const original = new Uint8ClampedArray(JSONB.parse(compressedOriginal));
+        const sunset = new Uint8ClampedArray(test);
+        const night = new Uint8ClampedArray(JSONB.parse(compressedNight));
+        holder[id] = {
+          original,
+          sunset,
+          night,
+          width,
+          height,
+        };
+      });
+      return holder;
+    },
+    [compressedFilteredBackgrounds],
+  );
 
   // initializable -- no need to update
   const scene = useRef(new Scene());
@@ -87,9 +124,6 @@ const Game: FC = () => {
 
   const target = useRef<HTMLDivElement | null>(null);
   const [isTalking, setIsTalking] = useState(false);
-
-  const lookupTables = useMakeLookupTables();
-  const filteredBackgrounds = useFilterBackground(lookupTables);
 
   useEffect(() => { // initialization
     if (!renderer) {
@@ -120,14 +154,13 @@ const Game: FC = () => {
     depth,
   );
 
-  const cameraDefaultPosition = useLoadWalls(
+  const wallsDone = useLoadWalls(
     scene.current,
-    camera.current,
-    dummyCamera.current,
-    directionalLight.current,
     cubeUnit,
     depth,
   );
+
+  const cameraDefaultPosition = useCameraPosition(camera.current, dummyCamera.current, cubeUnit);
 
   const gameEntities = useLoadEntities(
     scene.current,
@@ -138,7 +171,12 @@ const Game: FC = () => {
   );
 
   const focusPositions = useFocusPositions(cubeUnit);
-  const lightsLoaded = useLoadLights(hemisphereLight.current, ambientLight.current);
+  const lightsLoaded = useLoadLights(
+    directionalLight.current,
+    hemisphereLight.current,
+    ambientLight.current,
+    cubeUnit,
+  );
 
   useSunMoon(
     directionalLight.current, hemisphereLight.current, ambientLight.current,
@@ -234,8 +272,8 @@ const Game: FC = () => {
   useEnvMap(
     renderer,
     scene.current,
-    !!cameraDefaultPosition
-    && planesDone
+    planesDone
+    && wallsDone
     && lightsLoaded
     && !!gameEntities
     && backgroundShaded,
@@ -267,3 +305,61 @@ const Game: FC = () => {
 };
 
 export default Game;
+
+// const asyncDeflate = async (buffer:Buffer) => new Promise<Buffer>((resolve, reject) => {
+//   zlib.deflate(buffer, (error, data) => {
+//     if (error) {
+//       reject(error);
+//     } else {
+//       console.log(buffer.length, data.length);
+//       resolve(data);
+//     }
+//   });
+// });
+
+export async function getStaticProps(): Promise<{
+  props: {
+    compressedFilteredBackgrounds: Record<string, CompressedFilteredBackground>;
+  };
+}> {
+  const [nightfromday, LateSunset] = await Promise.all([
+    makeLookupTable('/nightfromday.CUBE'),
+    makeLookupTable('/LateSunset.3DL'),
+  ]);
+  const compressedFilteredBackgrounds:Record<string, CompressedFilteredBackground> = {};
+  const values = await Promise.all([...Object.entries(locationList).map(([id, location]) => {
+    const { background } = location;
+    const png = fs.createReadStream(path.join(process.cwd(), 'public', background)).pipe(new PNG());
+    return new Promise<[string, CompressedFilteredBackground]>((resolve) => {
+      png.on('parsed', async () => {
+        // const [original, sunset, night] = await Promise.all([
+        //   asyncDeflate(png.data),
+        //   asyncDeflate(colorLookup(LateSunset, png.data)),
+        //   asyncDeflate(colorLookup(nightfromday, png.data)),
+        // ]);
+        const [original, sunset, night] = await Promise.all([
+          png.data,
+          colorLookup(LateSunset, png.data),
+          colorLookup(nightfromday, png.data),
+        ]);
+        // console.log('sunset', ...checkBuffer(sunset));
+        // console.log('night', ...checkBuffer(night));
+        resolve([id, {
+          original: JSONB.stringify(original),
+          sunset: JSONB.stringify(sunset),
+          night: JSONB.stringify(night),
+          width: png.width,
+          height: png.height,
+        }]);
+      });
+    });
+  })]);
+  values.forEach(([id, filteredBackground]) => {
+    compressedFilteredBackgrounds[id] = filteredBackground;
+  });
+  return {
+    props: {
+      compressedFilteredBackgrounds,
+    },
+  };
+}
