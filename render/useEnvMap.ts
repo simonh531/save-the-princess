@@ -2,10 +2,7 @@ import { gql, useQuery } from '@apollo/client';
 import { useEffect, useRef } from 'react';
 import {
   PMREMGenerator, Scene, Texture, WebGLRenderer,
-  sRGBEncoding,
-  // PlaneGeometry,
-  // MeshBasicMaterial,
-  // Mesh,
+  // PlaneGeometry, MeshBasicMaterial, Mesh,
 } from 'three';
 // import { cleanup } from './meshCleanup';
 
@@ -29,11 +26,15 @@ function useEnvMap(
 
   useEffect(() => {
     if (renderer && scene && everythingLoaded) {
-      const pmremGenerator = new PMREMGenerator(renderer);
-      envMap.current = pmremGenerator.fromScene(scene).texture;
-      envMap.current.encoding = sRGBEncoding;
       // eslint-disable-next-line no-param-reassign
-      scene.environment = envMap.current;
+      scene.environment = null;
+      const pmremGenerator = new PMREMGenerator(renderer);
+      for (let i = 0; i < 4; i += 1) { // number of envmap loops to get a good color
+        envMap.current = pmremGenerator.fromScene(scene).texture;
+        // eslint-disable-next-line no-param-reassign
+        scene.environment = envMap.current;
+      }
+      envMap.current.dispose();
       pmremGenerator.dispose();
 
       // const testplane = new PlaneGeometry(3, 3);

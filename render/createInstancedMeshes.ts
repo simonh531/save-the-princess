@@ -7,8 +7,6 @@ import {
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { ScaledInstancedMesh, Tile } from '../utils/interfaces';
 
-const envMapIntensity = 0.15;
-
 async function createInstancedMeshes(
   tile: Tile,
   count: number, // different because is not being set
@@ -65,8 +63,6 @@ async function createInstancedMeshes(
   let material: MeshStandardMaterial | MeshStandardMaterial[];
   const standardSettings = {
     map,
-    transparent: typeof tile === 'string' || !tile.geometry,
-    envMapIntensity,
   };
   if (tile.clearcoat) {
     const physicalSettings = {
@@ -80,7 +76,7 @@ async function createInstancedMeshes(
   if (tile.colors) {
     material = [
       material,
-      ...tile.colors.map((color) => new MeshPhysicalMaterial({ color, envMapIntensity })),
+      ...tile.colors.map((color) => new MeshPhysicalMaterial({ color })),
     ];
   }
   const mesh = new InstancedMesh(

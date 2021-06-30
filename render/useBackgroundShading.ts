@@ -18,7 +18,9 @@ function useBackgroundShading(
   filteredBackgrounds: Record<string, FilteredBackground>,
 ):boolean {
   const { data } = useQuery(TIMELOCATION);
-  const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0));
+  const backgroundRenderTarget = useRef(new WebGLCubeRenderTarget(0, {
+    encoding: sRGBEncoding,
+  }));
   const [canvasCtx, setCanvasCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [canvasTexture, setCanvasTexture] = useState<CanvasTexture>();
   const [loaded, setLoaded] = useState(false);
@@ -37,7 +39,7 @@ function useBackgroundShading(
     // eslint-disable-next-line no-param-reassign
     scene.background = backgroundRenderTarget.current.texture;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scene]);
+  }, []);
 
   useEffect(() => { // handle background shading
     setLoaded(false);

@@ -28,10 +28,11 @@ const useLoadEntities = (
   wallsLoaded: boolean, // indicates that curent camera position is correct
   cubeUnit: number, // possibly moved to location file
   depth: number, // possibly moved to location file
-):GameEntity[] => {
+):[GameEntity[], boolean] => {
   const { data } = useQuery(LOCATION);
   const { locationId } = data;
   const [gameEntities, setGameEntities] = useState<GameEntity[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
   const loadEntities = useCallback(async () => {
     const location = Locations[locationId];
@@ -48,7 +49,11 @@ const useLoadEntities = (
           loader.loadAsync(entityData.file),
         ]);
         const shape = svgData.paths[0].toShapes(true);
-        const geometry = new ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+        const geometry = new ExtrudeGeometry(shape, {
+          depth,
+          bevelThickness: 0,
+          bevelSize: -0.001,
+        });
         geometry.center();
         let scale = 0;
         let x = 1;
@@ -65,9 +70,7 @@ const useLoadEntities = (
         texture.encoding = sRGBEncoding;
         const material = new MeshStandardMaterial({
           map: texture,
-          transparent: true,
         });
-        material.envMapIntensity = 0.15;
         const entityMesh = new Mesh(geometry, material);
         entityMesh.scale.set(scale, -scale, -0.01);
         entityMesh.castShadow = true;
@@ -100,6 +103,7 @@ const useLoadEntities = (
       }));
     }
     setGameEntities(holder);
+    setLoaded(true);
     return holder;
   }, [cameraPosition, cubeUnit, depth, locationId, scene]);
 
@@ -114,7 +118,7 @@ const useLoadEntities = (
     return () => { /* do nothing */ };
   }, [locationId, wallsLoaded, loadEntities]);
 
-  return gameEntities;
+  return [gameEntities, loaded];
 };
 
 export default useLoadEntities;

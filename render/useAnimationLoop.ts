@@ -3,6 +3,7 @@ import {
 } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
+  AmbientLight,
   Camera, Color, DirectionalLight, Euler, Material,
   PerspectiveCamera, Raycaster, Renderer, Scene, Vector2, Vector3,
 } from 'three';
@@ -23,6 +24,7 @@ const useAnimationLoop = (
   dummyCamera: Camera,
   directionalLight: DirectionalLight,
   directionalLightTarget: { position: Vector3; color: Color; },
+  ambientLight: AmbientLight,
   gameEntities: GameEntity[],
   transitionQueue: MutableRefObject<{
     type: string;
@@ -91,6 +93,7 @@ const useAnimationLoop = (
         directionalLight.color.lerp(
           directionalLightTarget.color, Math.min(delta * 0.0002, 1),
         );
+        ambientLight.color.copy(directionalLight.color);
         if (gameEntities) {
           if ( // only change where entities are facing if moving
             Math.abs(camera.position.x - prevPositionX) > 0.001
@@ -212,7 +215,7 @@ const useAnimationLoop = (
     return () => { /* do nothing */ };
   }, [
     renderer, gameEntities, camera, dummyCamera,
-    directionalLight, directionalLightTarget, scene, transitionQueue,
+    directionalLight, directionalLightTarget, scene, transitionQueue, ambientLight.color,
   ]);
 
   useEffect(() => { // handle camera movement on focus change

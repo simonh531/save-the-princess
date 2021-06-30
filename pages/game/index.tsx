@@ -9,7 +9,6 @@ import {
   Camera,
   Vector3,
   DirectionalLight,
-  HemisphereLight,
   AmbientLight,
   Color,
   sRGBEncoding,
@@ -33,7 +32,6 @@ import useAnimationLoop from '../../render/useAnimationLoop';
 import useSunMoon from '../../render/useSunMoon';
 import useLoadWalls from '../../render/useLoadWalls';
 import useLoadEntities from '../../render/useLoadEntities';
-import useLoadLights from '../../render/useLoadLights';
 import useLoadPlanes from '../../render/useLoadPlanes';
 import useBackgroundShading from '../../render/useBackgroundShading';
 import useEnvMap from '../../render/useEnvMap';
@@ -108,7 +106,6 @@ const Game: FC<{
   const camera = useRef(new PerspectiveCamera());
   const dummyCamera = useRef(new Camera());
   const ambientLight = useRef(new AmbientLight(0xffffff, 0));
-  const hemisphereLight = useRef(new HemisphereLight(0xffffff, 0xffffff, 0));
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
   const directionalLightTarget = useRef({ position: new Vector3(), color: new Color() });
 
@@ -117,20 +114,18 @@ const Game: FC<{
   // need to update
   const [renderer, setRenderer] = useState<WebGLRenderer>();
 
-  const target = useRef<HTMLDivElement | null>(null);
+  const canvas = useRef<HTMLCanvasElement | null>(null);
   const [isTalking, setIsTalking] = useState(false);
 
   useEffect(() => { // initialization
-    if (!renderer) {
+    if (!renderer && canvas.current) {
       const newRenderer = new WebGLRenderer({
+        canvas: canvas.current,
         premultipliedAlpha: false,
       });
       newRenderer.gammaFactor = 2.2; // deprecated?
       newRenderer.outputEncoding = sRGBEncoding;
       newRenderer.shadowMap.enabled = true;
-      if (target.current) {
-        target.current.replaceChild(newRenderer.domElement, target.current.childNodes[0]);
-      }
       setRenderer(newRenderer);
     }
     directionalLight.current.castShadow = true;
@@ -138,7 +133,6 @@ const Game: FC<{
     directionalLight.current.shadow.mapSize.width = 2048;
 
     scene.current.add(directionalLight.current);
-    scene.current.add(hemisphereLight.current);
     scene.current.add(ambientLight.current);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -157,7 +151,7 @@ const Game: FC<{
 
   const cameraDefaultPosition = useCameraPosition(camera.current, dummyCamera.current, cubeUnit);
 
-  const gameEntities = useLoadEntities(
+  const [gameEntities, gameEntitiesLoaded] = useLoadEntities(
     scene.current,
     camera.current.position,
     !!cameraDefaultPosition,
@@ -166,16 +160,12 @@ const Game: FC<{
   );
 
   const focusPositions = useFocusPositions(cubeUnit);
-  const lightsLoaded = useLoadLights(
-    directionalLight.current,
-    hemisphereLight.current,
-    ambientLight.current,
-    cubeUnit,
-  );
 
   useSunMoon(
-    directionalLight.current, hemisphereLight.current, ambientLight.current,
+    directionalLight.current,
+    ambientLight.current,
     directionalLightTarget.current,
+    cubeUnit,
   );
   const backgroundShaded = useBackgroundShading(renderer, scene.current, filteredBackgrounds);
 
@@ -207,8 +197,12 @@ const Game: FC<{
           break;
       }
     }
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
+    if (canvas.current) {
+      const htmlCanvas = canvas.current;
+      htmlCanvas.addEventListener('keydown', handleKeydown);
+      return () => htmlCanvas.removeEventListener('keydown', handleKeydown);
+    }
+    return () => { /* do nothing */ };
   }, [advanceAction, showFps]);
 
   // update entities based on checks
@@ -256,6 +250,7 @@ const Game: FC<{
     dummyCamera.current,
     directionalLight.current,
     directionalLightTarget.current,
+    ambientLight.current,
     gameEntities,
     transitionQueue,
     advanceAction,
@@ -269,8 +264,7 @@ const Game: FC<{
     scene.current,
     planesDone
     && wallsDone
-    && lightsLoaded
-    && !!gameEntities
+    && gameEntitiesLoaded
     && backgroundShaded,
   );
 
@@ -279,8 +273,8 @@ const Game: FC<{
   }
 
   return (
-    <GameArea ref={target}>
-      <div />
+    <GameArea>
+      <canvas tabIndex={0} ref={canvas} />
       {showFps && <FPS>{fps}</FPS>}
       <GameGrid>
         <DialogueBox
