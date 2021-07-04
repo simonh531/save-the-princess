@@ -23,26 +23,24 @@ const useFocusPositions = (
   const {
     entities, focusPositions, mapWidth, mapDepth,
   } = location;
-  const holder = { ...focusPositions };
 
   useEffect(() => {
-    if (entities && entities.length) {
-      entities.forEach((entity) => {
-        if (entity.focusPositionId) {
-          const entityData = MeshData[entity.meshId];
-          holder[entity.focusPositionId] = new Vector3(
-            (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
-            (entityData.height - cubeUnit) / 2,
-            (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
-          );
-          if (entityData.cameraAdjustment) {
-            holder[entity.focusPositionId].add(entityData.cameraAdjustment);
-          }
+    const holder = { ...focusPositions };
+    if (entities && entities.size) {
+      entities.forEach((entity, id) => {
+        const entityData = MeshData[entity.meshId];
+        holder[id] = new Vector3(
+          (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
+          (entityData.height - cubeUnit) / 2,
+          (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
+        );
+        if (entityData.cameraAdjustment) {
+          holder[id].add(entityData.cameraAdjustment);
         }
       });
     }
     setFocusPositionsReturn(holder);
-  }, [locationId]);
+  }, [cubeUnit, entities, focusPositions, locationId, mapDepth, mapWidth]);
 
   return focusPositionsReturn;
 };

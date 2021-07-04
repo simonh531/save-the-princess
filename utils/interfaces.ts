@@ -1,7 +1,10 @@
 import { DefaultTheme } from 'styled-components';
-import { InstancedMesh, Mesh, Vector3 } from 'three';
+import {
+  AnimationMixer, Group, InstancedMesh, Vector3,
+} from 'three';
 
-export type activateable = string | { focusId: string, dialogueId: string } | (() => void)
+export type Activatable = string | { focusId: string, dialogueId: string } | (() => void)
+export type Checks = Record<string, string|number|boolean>
 
 export interface WindowSize {
   width: number | undefined
@@ -18,6 +21,12 @@ export interface MeshData {
   geometry: string
   height: number
   cameraAdjustment?: Vector3
+  alt?: Record<string, {
+    file: string
+    geometry: string
+    height?: number
+    cameraAdjustment?: Vector3
+  }>
 }
 
 export interface LocationEntity {
@@ -25,16 +34,20 @@ export interface LocationEntity {
   x: number
   y?: number
   z: number
-  focusPositionId?: string
-  activate?: activateable
-  visible?: () => boolean
+  altId?: string
+  activate?: Activatable
+  // eslint-disable-next-line no-unused-vars
+  visible?: (checks: Checks) => boolean
 }
 
 export interface GameEntity {
-  mesh: Mesh
+  group: Group
+  altId: string
+  mixers: Record<string, AnimationMixer>
   getPosition: () => Vector3
-  activate?: activateable
-  getVisibility?: () => boolean
+  activate?: Activatable
+  // eslint-disable-next-line no-unused-vars
+  getVisibility?: (checks: Checks) => boolean
 }
 
 export interface Tile {
@@ -66,20 +79,20 @@ export interface Location {
   walls?: Plane
   horizontalPlanes: Plane[]
   focusPositions?: Record<string, Vector3>
-  entities?: LocationEntity[]
+  entities?: Map<string, LocationEntity>
 }
 
 export interface Dialogue {
   text: (() => string) | string
   speaker?: string
   speakerFocusPositionId?: string
-  next?: activateable
+  next?: Activatable
   nextText?: string
   effect?: () => void
-  actions?: activateable[]
-  choice?: Record<string, activateable>
-  topic?: Record<string, activateable>
-  item?: Record<string, activateable>
+  actions?: Activatable[]
+  choice?: Record<string, Activatable>
+  topic?: Record<string, Activatable>
+  item?: Record<string, Activatable>
 }
 
 export interface DialogueData extends Dialogue {
@@ -93,13 +106,13 @@ export interface DialogueData extends Dialogue {
 export interface Topic {
   name: string,
   description: (() => string) | string,
-  actions?: activateable[]
+  actions?: Activatable[]
 }
 
 export interface Item {
   name: string,
   description: (() => string) | string,
-  actions?: activateable[]
+  actions?: Activatable[]
 }
 
 export interface Skill {
@@ -136,4 +149,14 @@ export interface LookupTable {
 export interface ScaledInstancedMesh {
   mesh: InstancedMesh,
   scale?: number
+}
+
+export interface Command {
+  command: string,
+  id: string,
+}
+
+export interface ChangeMeshCommand extends Command {
+  command: 'changeMesh'
+  mesh: string
 }

@@ -14,6 +14,13 @@ const hyde = {
   consonant: '/assets/hyde/hydeConsonant.wav',
 };
 
+const takero = {
+  backgroundColor: 'antiquewhite',
+  color: 'black',
+  vowel: '/assets/kalvin/kalvinVowel.wav',
+  consonant: '/assets/kalvin/kalvinConsonant.wav',
+};
+
 const kalvin = {
   backgroundColor: 'lightskyblue',
   color: 'black',
@@ -30,6 +37,7 @@ const themes:Record<string, DefaultTheme> = {
   testprincess,
   hyde,
   kalvin,
+  takero,
   defaultTheme,
 };
 

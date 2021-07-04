@@ -12,28 +12,26 @@ const test:Location = {
   cameraVerticalRange: Math.PI / 4,
   direction: 0,
   horizontalPlanes: [],
-  entities: [
-    {
+  entities: new Map([
+    ['hyde', {
       meshId: 'hyde',
       x: 3,
       z: 3,
-      focusPositionId: 'hyde',
       activate: {
         focusId: 'hyde',
         dialogueId: 'hyde/changeTime',
       },
-    },
-    {
+    }],
+    ['present', {
       meshId: 'present',
       x: 1.5,
       z: 3,
-      focusPositionId: 'present',
       activate: {
         focusId: 'present',
         dialogueId: 'present/ackbar',
       },
-    },
-  ],
+    }],
+  ]),
 };
 
 export default test;

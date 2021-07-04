@@ -15,7 +15,7 @@ export const test:Dialogue = {
 
 export const docks:Dialogue = {
   speakerFocusPositionId: '',
-  text: 'Nevermind. It smells here. The weird [triplet princesses](0) were better company.',
+  text: 'Nevermind. It smells here. The weird [twin princesses](0) were better company.',
   actions: [
     ():void => {
       setLocation('test');

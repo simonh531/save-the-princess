@@ -1,12 +1,13 @@
 import { makeVar } from '@apollo/client';
-import { StateItem } from '../utils/interfaces';
+import { Command, StateItem } from '../utils/interfaces';
 
 export const dialogueId = makeVar('');
 export const focusId = makeVar('');
 export const locationId = makeVar('test');
-export const topics = makeVar<Array<string>>([]);
-export const items = makeVar<Array<StateItem>>([{ id: 'pocketwatch', quantity: 1 }]);
+export const topics = makeVar<string[]>([]);
+export const items = makeVar<StateItem[]>([{ id: 'pocketwatch', quantity: 1 }]);
 export const time = makeVar(12);
+export const commandQueue = makeVar<Command[]>([]);
 
 export function setFocus(newFocus: string):void {
   focusId(newFocus);
@@ -56,4 +57,19 @@ export function setTime(newTime:number):void {
 
 export function setLocation(newLocation:string):void {
   locationId(newLocation);
+}
+
+export function addCommand(id:string, command:string, options:Record<string, string>):void {
+  commandQueue([
+    ...commandQueue(),
+    {
+      ...options,
+      id,
+      command,
+    },
+  ]);
+}
+
+export function resetCommandQueue():void {
+  commandQueue([]);
 }

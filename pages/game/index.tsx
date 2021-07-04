@@ -12,9 +12,7 @@ import {
   AmbientLight,
   Color,
   sRGBEncoding,
-  Material,
 } from 'three';
-import { useQuery, gql } from '@apollo/client';
 import path from 'path';
 import fs from 'fs';
 import zlib from 'zlib';
@@ -40,16 +38,6 @@ import useCameraPosition from '../../render/useCameraPosition';
 import colorLookup, { makeLookupTable } from '../../utils/colorLookup';
 import { CompressedFilteredBackground, FilteredBackground } from '../../utils/interfaces';
 
-const GAME_STATE = gql`
-  query GetGameState {
-    dialogueId,
-    focusId,
-    locationId,
-    time,
-    checks,
-  }
-`;
-
 const GameArea = styled.main`
   height: 100vh;
   width: 100vw;
@@ -71,9 +59,7 @@ const Game: FC<{
   compressedFilteredBackgrounds:Record<string, CompressedFilteredBackground>
 }> = ({ compressedFilteredBackgrounds }) => {
   const [advanceAction, setAdvanceAction] = useState(() => () => { /* do nothing */ });
-  const { loading, /* error, */ data } = useQuery(GAME_STATE);
   const [showFps, setShowFps] = useState(false);
-  const { checks } = data;
 
   const filteredBackgrounds = useMemo(
     () => {
@@ -109,11 +95,10 @@ const Game: FC<{
   const directionalLight = useRef(new DirectionalLight(0xffffff, 0));
   const directionalLightTarget = useRef({ position: new Vector3(), color: new Color() });
 
-  const transitionQueue = useRef<{type: string, value: number, material?: Material}[]>([]);
-
   // need to update
   const [renderer, setRenderer] = useState<WebGLRenderer>();
 
+  const gameArea = useRef<HTMLDivElement | null>(null);
   const canvas = useRef<HTMLCanvasElement | null>(null);
   const [isTalking, setIsTalking] = useState(false);
 
@@ -151,10 +136,9 @@ const Game: FC<{
 
   const cameraDefaultPosition = useCameraPosition(camera.current, dummyCamera.current, cubeUnit);
 
-  const [gameEntities, gameEntitiesLoaded] = useLoadEntities(
+  const [gameEntities, gameEntitiesLoaded, mixerQueue] = useLoadEntities(
     scene.current,
-    camera.current.position,
-    !!cameraDefaultPosition,
+    cameraDefaultPosition,
     cubeUnit,
     depth,
   );
@@ -179,7 +163,6 @@ const Game: FC<{
 
   useEffect(() => { // handle keyboard
     function handleKeydown(event:KeyboardEvent) {
-      // console.log(event);
       switch (event.code) {
         case 'Space':
           advanceAction();
@@ -191,59 +174,22 @@ const Game: FC<{
           advanceAction();
           break;
         case 'Backquote':
-          setShowFps(!showFps);
+          setShowFps((prevValue) => !prevValue);
           break;
         default:
           break;
       }
     }
-    if (canvas.current) {
-      const htmlCanvas = canvas.current;
-      htmlCanvas.addEventListener('keydown', handleKeydown);
-      return () => htmlCanvas.removeEventListener('keydown', handleKeydown);
+    if (gameArea.current) {
+      const game = gameArea.current;
+      game.addEventListener('keydown', handleKeydown);
+      return () => game.removeEventListener('keydown', handleKeydown);
     }
     return () => { /* do nothing */ };
-  }, [advanceAction, showFps]);
-
-  // update entities based on checks
-  useEffect(() => {
-    if (gameEntities.length) {
-      gameEntities.forEach((entity) => {
-        if (entity.getVisibility) {
-          if (entity.getVisibility()) {
-            if (Array.isArray(entity.mesh.material) && entity.mesh.material[0].opacity === 0) {
-              transitionQueue.current.push({
-                type: 'opacity',
-                value: 1,
-                material: entity.mesh.material[0],
-              });
-            } else if (!Array.isArray(entity.mesh.material) && entity.mesh.material.opacity === 0) {
-              transitionQueue.current.push({
-                type: 'opacity',
-                value: 1,
-                material: entity.mesh.material,
-              });
-            }
-          } else if (Array.isArray(entity.mesh.material) && entity.mesh.material[0].opacity === 1) {
-            transitionQueue.current.push({
-              type: 'opacity',
-              value: 0,
-              material: entity.mesh.material[0],
-            });
-          } else if (!Array.isArray(entity.mesh.material) && entity.mesh.material.opacity === 1) {
-            transitionQueue.current.push({
-              type: 'opacity',
-              value: 0,
-              material: entity.mesh.material,
-            });
-          }
-        }
-        entity.mesh.position.copy(entity.getPosition());
-      });
-    }
-  }, [gameEntities, checks]);
+  }, [advanceAction]);
 
   const fps = useAnimationLoop(
+    gameArea.current,
     renderer,
     scene.current,
     camera.current,
@@ -252,7 +198,7 @@ const Game: FC<{
     directionalLightTarget.current,
     ambientLight.current,
     gameEntities,
-    transitionQueue,
+    mixerQueue,
     advanceAction,
     showFps,
     cameraDefaultPosition,
@@ -268,13 +214,9 @@ const Game: FC<{
     && backgroundShaded,
   );
 
-  if (loading || !data) {
-    return null;
-  }
-
   return (
-    <GameArea>
-      <canvas tabIndex={0} ref={canvas} />
+    <GameArea tabIndex={0} ref={gameArea}>
+      <canvas ref={canvas} />
       {showFps && <FPS>{fps}</FPS>}
       <GameGrid>
         <DialogueBox

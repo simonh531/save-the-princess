@@ -1,5 +1,4 @@
-import { Location } from '../utils/interfaces';
-import { checks } from '../data/checks';
+import { Checks, Location } from '../utils/interfaces';
 
 const test:Location = {
   background: '/assets/test/testfield.png',
@@ -43,59 +42,54 @@ const test:Location = {
       },
     },
   ],
-  entities: [
-    {
+  entities: new Map([
+    ['testprincess1', {
       meshId: 'testprincess',
       x: 1,
       z: 3.5,
-      focusPositionId: 'testprincess1',
       activate: {
         focusId: 'testprincess1',
         dialogueId: 'testprincess/tutorial',
       },
-    },
-    {
+    }],
+    ['testprincess2', {
       meshId: 'testprincess',
       x: 1.9,
       z: 1.5,
-      focusPositionId: 'testprincess',
-      activate: {
-        focusId: 'testprincess',
-        dialogueId: 'testprincess/birthdayPout',
-      },
-    },
-    {
-      meshId: 'testprincess',
-      x: 3,
-      z: 3.5,
-      focusPositionId: 'testprincess2',
       activate: {
         focusId: 'testprincess2',
-        dialogueId: 'testprincess/changeTime',
+        dialogueId: 'testprincess/birthdayPout',
       },
-    },
-    {
+    }],
+    ['takero', {
+      meshId: 'takero',
+      x: 3,
+      z: 3.5,
+      activate: {
+        focusId: 'takero',
+        dialogueId: 'takero/changeTime',
+      },
+    }],
+    ['hyde', {
       meshId: 'hyde',
       x: 2.4,
       z: 3,
-      focusPositionId: 'hyde',
       activate: {
         focusId: 'hyde',
         dialogueId: 'hyde/intro',
       },
-    },
-    {
+    }],
+    ['present', {
       meshId: 'present',
       x: 1.5,
       z: 3,
-      focusPositionId: 'present',
       activate: {
         focusId: 'present',
         dialogueId: 'present/pickup',
       },
-      visible: () => !checks().presentTaken,
-    },
-  ],
+      visible: (checks:Checks) => !checks.presentTaken,
+    }],
+  ]),
 };
 
 export default test;

@@ -34,7 +34,16 @@ export async function cleanTileArray(
 }
 
 export async function cleanEntities(
-  entities:Promise<GameEntity[]>,
+  entities:Promise<Map<string, GameEntity>>,
 ):Promise<void> {
-  (await entities).forEach((entity) => cleanup(entity.mesh));
+  (await entities).forEach((entity) => {
+    entity.group.children.forEach((object3D) => {
+      if (object3D instanceof Mesh) {
+        cleanup(object3D);
+      }
+    });
+    if (entity.group.parent) {
+      entity.group.parent.remove(entity.group);
+    }
+  });
 }

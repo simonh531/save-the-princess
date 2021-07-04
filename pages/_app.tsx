@@ -5,7 +5,7 @@ import type { AppProps } from 'next/app';
 import { ApolloProvider } from '@apollo/client/react';
 import { ApolloClient, InMemoryCache } from '@apollo/client';
 import {
-  dialogueId, focusId, locationId, topics, items, time,
+  dialogueId, focusId, locationId, topics, items, time, commandQueue,
 } from '../data/state';
 import { checks } from '../data/checks';
 
@@ -48,6 +48,11 @@ const client = new ApolloClient({
           checks: {
             read() {
               return checks();
+            },
+          },
+          commandQueue: {
+            read() {
+              return commandQueue();
             },
           },
         },
