@@ -52,7 +52,6 @@ const FPS = styled.span`
 `;
 
 // units are meters let's say
-const depth = 0.1;
 const cubeUnit = 3;
 
 const Game: FC<{
@@ -122,28 +121,12 @@ const Game: FC<{
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const planesDone = useLoadPlanes(
-    scene.current,
-    cubeUnit,
-    depth,
-  );
+  const focusPositions = useFocusPositions();
+  const cameraDefaultPosition = useCameraPosition(camera.current, dummyCamera.current);
 
-  const wallsDone = useLoadWalls(
-    scene.current,
-    cubeUnit,
-    depth,
-  );
-
-  const cameraDefaultPosition = useCameraPosition(camera.current, dummyCamera.current, cubeUnit);
-
-  const [gameEntities, gameEntitiesLoaded, mixerQueue] = useLoadEntities(
-    scene.current,
-    cameraDefaultPosition,
-    cubeUnit,
-    depth,
-  );
-
-  const focusPositions = useFocusPositions(cubeUnit);
+  const planesDone = useLoadPlanes(scene.current);
+  const wallsDone = useLoadWalls(scene.current);
+  const [gameEntities, gameEntitiesLoaded, mixerQueue] = useLoadEntities(scene.current);
 
   useSunMoon(
     directionalLight.current,

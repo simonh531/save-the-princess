@@ -3,13 +3,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
   Scene,
-  Vector3,
   Object3D,
 } from 'three';
-import { cleanTiles } from './meshCleanup';
-import { ScaledInstancedMesh } from '../utils/interfaces';
+import { cleanTilesArray } from './meshCleanup';
 import Locations from '../locations';
-import createInstancedMeshes, { loadPlan, placeInstanceAtDummy } from './createInstancedMeshes';
+import createInstancedMeshes, { loadPlan, placeInstanceAtDummy } from './createInstancedMesh';
+import { InstancedMeshData } from '../utils/interfaces';
 
 const LOCATION = gql`
   query GetGameState {
@@ -17,14 +16,8 @@ const LOCATION = gql`
   }
 `;
 
-// units are meters let's say
-// const depth = 0.1;
-// const cubeUnit = 3;
-
 const useLoadWalls = (
   scene: Scene,
-  cubeUnit: number, // possibly moved to location file
-  depth: number, // possibly moved to location file
 ):boolean => {
   const { data } = useQuery(LOCATION);
   const { locationId } = data;
@@ -32,134 +25,135 @@ const useLoadWalls = (
 
   const loadWalls = useCallback(async () => {
     const location = Locations[locationId];
-    const cameraPosition = new Vector3();
     const {
-      mapWidth, mapDepth, cameraX, cameraZ, walls,
+      mapWidth, mapHeight, mapDepth, walls = [],
     } = location;
 
-    const tileMeshes:Record<string, Promise<ScaledInstancedMesh>> = {};
-
-    if (walls) {
-      const tileCount: Record<string, number> = {};
-      const { plan, tiles } = walls;
-      const png = await loadPlan(plan);
-      // first pass over png to get number per instanced mesh
-      png.data.forEach((value, index) => {
-        // index % 4 === 3 indicates opacity which isn't relevant
-        if (tiles[value] && index % 4 !== 3) { // exists
-          if (tileCount[value]) {
-            tileCount[value] += 1;
-          } else {
-            tileCount[value] = 1;
+    const wallMeshArray = walls.map(async (wallData, wallIndex) => {
+      const wallMeshes:Map<string, InstancedMeshData> = new Map();
+      const wallCount: Map<string, number> = new Map();
+      const {
+        plan, tiles, unit = 1, aspect = 1,
+      } = wallData;
+      if (plan && tiles) {
+        const png = await loadPlan(plan);
+        // first pass over png to get number per instanced mesh
+        png.data.forEach((value) => {
+          if (tiles.has(`${value}`)) { // exists
+            const count = wallCount.get(`${value}`);
+            if (count !== undefined) {
+              wallCount.set(`${value}`, count + 1);
+            } else {
+              wallCount.set(`${value}`, 1);
+            }
           }
-        }
-      });
+        });
 
-      Object.entries(tiles).forEach(
-        ([id, tile]) => {
-          tileMeshes[id] = createInstancedMeshes(
-            tile, tileCount[id], true, true, depth, cubeUnit,
-          );
-        },
-      );
+        tiles.forEach((tile, id) => {
+          const count = wallCount.get(id);
+          if (count !== undefined) {
+            wallMeshes.set(id, {
+              depth: tile.depth || 0.1,
+              meshData: createInstancedMeshes(
+                tile, count, {
+                  castShadow: true,
+                  receiveShadow: true,
+                  unit,
+                  aspect,
+                },
+              ),
+            });
+          }
+        });
 
-      // reset tileCount to be reused because the name is nice and ids are already there
-      Object.keys(tileCount).forEach((id) => { tileCount[id] = 0; });
-      // second pass over png to place instanced mesh
-      const pngPromises:Promise<void>[] = [];
-      png.data.forEach((id, index) => { // value of the pixel becomes id
-        const stringId = id.toString();
-        const direction = index % 4;
-        const x = Math.floor(index / 4) % mapWidth;
-        const y = Math.floor((index / 4) / mapWidth);
-        switch (direction) {
-          case 0:
-            if (tileMeshes[stringId]) {
-              // left-facing wall
-              const currentIndex = tileCount[stringId];
-              tileCount[stringId] += 1;
-              const dummy = new Object3D();
-              dummy.position.set(
-                (x - (mapWidth / 2) + 0.5) * cubeUnit - ((cubeUnit - depth) / 2),
-                0, // cubeUnit / 2,
-                (y - (mapDepth / 2) + 0.5) * cubeUnit,
-              );
-              dummy.rotation.set(0, -Math.PI / 2, 0);
-              pngPromises.push(placeInstanceAtDummy(
-                currentIndex,
-                dummy,
-                tileMeshes[stringId],
-              ));
+        // reset wallCount to be reused because the name is nice and ids are already there
+        wallCount.forEach((_, id) => wallCount.set(id, 0));
+        // second pass over png to place instanced mesh
+        const pngPromises:Promise<void>[] = [];
+        png.data.forEach((id, index) => { // value of the pixel becomes id
+          const wallMeshdata = wallMeshes.get(`${id}`);
+          const currentIndex = wallCount.get(`${id}`);
+          if (wallMeshdata && currentIndex !== undefined) {
+            const direction = index % 4;
+            const x = Math.floor(index / 4) % png.width;
+            const z = Math.floor((index / 4) / png.width);
+            const { meshData, depth } = wallMeshdata;
+            const dummy = new Object3D();
+            wallCount.set(`${id}`, currentIndex + 1);
+            let accumulatedHeight = 0;
+            for (let i = 0; i < wallIndex; i += 1) {
+              accumulatedHeight += (walls[i].unit || 1) / (walls[i].aspect || 1);
             }
-            break;
-          case 1:
-            if (tileMeshes[stringId]) {
-              // bottom-facing wall
-              const currentIndex = tileCount[stringId];
-              tileCount[stringId] += 1;
-              const dummy = new Object3D();
-              dummy.position.set(
-                (x - (mapWidth / 2) + 0.5) * cubeUnit,
-                0, // cubeUnit / 2,
-                (y - (mapDepth / 2) + 0.5) * cubeUnit + ((cubeUnit - depth) / 2),
-              );
-              dummy.rotation.set(0, 0, 0);
-              pngPromises.push(placeInstanceAtDummy(
-                currentIndex,
-                dummy,
-                tileMeshes[stringId],
-              ));
+            const y = accumulatedHeight + (unit / aspect - mapHeight) / 2;
+            switch (direction) {
+              case 0:
+                // left-facing wall
+                dummy.position.set(
+                  (x + 0.5) * unit - (mapWidth + unit - depth) / 2,
+                  y,
+                  (z + 0.5) * unit - mapDepth / 2,
+                );
+                dummy.rotation.set(0, -Math.PI / 2, 0);
+                break;
+              case 1:
+                // bottom-facing wall
+                dummy.position.set(
+                  (x + 0.5) * unit - mapWidth / 2,
+                  y,
+                  (z + 0.5) * unit - (mapDepth - unit + depth) / 2,
+                );
+                dummy.rotation.set(0, 0, 0);
+                break;
+              case 2:
+                // right-facing wall
+                dummy.position.set(
+                  (x + 0.5) * unit - (mapWidth - unit + depth) / 2,
+                  y,
+                  (z + 0.5) * unit - mapDepth / 2,
+                );
+                dummy.rotation.set(0, Math.PI / 2, 0);
+                break;
+              case 3:
+                // top-facing wall
+                dummy.position.set(
+                  (x + 0.5) * unit - mapWidth / 2,
+                  y,
+                  (z + 0.5) * unit - (mapDepth + unit - depth) / 2,
+                );
+                dummy.rotation.set(0, Math.PI, 0);
+                break;
+              default:
+                break;
             }
-            break;
-          case 2:
-            if (tileMeshes[stringId]) {
-              // right-facing wall
-              const currentIndex = tileCount[stringId];
-              tileCount[stringId] += 1;
-              const dummy = new Object3D();
-              dummy.position.set(
-                (x - (mapWidth / 2) + 0.5) * cubeUnit + ((cubeUnit - depth) / 2),
-                0, // cubeUnit / 2,
-                (y - (mapDepth / 2) + 0.5) * cubeUnit,
-              );
-              dummy.rotation.set(0, Math.PI / 2, 0);
-              pngPromises.push(placeInstanceAtDummy(
-                currentIndex,
-                dummy,
-                tileMeshes[stringId],
-              ));
-            }
-            break;
-          default:
-            break;
-        }
-      });
+            pngPromises.push(placeInstanceAtDummy(
+              currentIndex,
+              dummy,
+              meshData,
+            ));
+          }
+        });
 
-      await Promise.all(pngPromises);
+        await Promise.all(pngPromises); // wait for tiles to have been placed at dummies
 
-      Object.values(tileMeshes).forEach(async (wallPromise) => {
-        const wall = await wallPromise;
-        wall.mesh.instanceMatrix.needsUpdate = true;
-        scene.add(wall.mesh);
-      });
-    }
-
-    cameraPosition.set(
-      (cameraX - (mapWidth / 2) + 0.5) * cubeUnit,
-      0, // 1.5,
-      (cameraZ - (mapWidth / 2) + 0.5) * cubeUnit,
-    );
-
+        wallMeshes.forEach(async (wallPromise) => {
+          const wall = await wallPromise.meshData;
+          wall.mesh.instanceMatrix.needsUpdate = true;
+          scene.add(wall.mesh);
+        });
+      }
+      return wallMeshes;
+    });
+    const holder = await Promise.all(wallMeshArray);
     setLoaded(true);
-    return tileMeshes;
-  }, [cubeUnit, depth, locationId, scene]);
+    return holder;
+  }, [locationId, scene]);
 
   useEffect(() => {
     setLoaded(false);
     if (Locations[locationId]) {
-      const tiles = loadWalls();
-      return () => {
-        cleanTiles(tiles);
+      const walls = loadWalls();
+      return async () => {
+        cleanTilesArray(walls);
       };
     }
     return () => { /* do nothing */ };

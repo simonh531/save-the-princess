@@ -24,3 +24,9 @@ export const docks:Dialogue = {
   ],
   next: '',
 };
+
+export const carriage:Dialogue = {
+  speakerFocusPositionId: '',
+  text: 'This bumpy road is making you sick. You struggle to not throw up.',
+  next: '',
+};

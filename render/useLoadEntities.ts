@@ -22,10 +22,12 @@ import {
 import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader';
 import { cleanEntities } from './meshCleanup';
 import Locations from '../locations';
+import CharacterStats from '../data/characterStats';
 import { ChangeMeshCommand, GameEntity } from '../utils/interfaces';
 import MeshData from '../meshData';
 import { getActiveMesh, getActiveMixer } from '../utils/getters';
 import { resetCommandQueue } from '../data/state';
+import calcCameraPosition from './calcCameraPosition';
 
 const LOCATION_CHECKS = gql`
   query GetLocationChecks {
@@ -51,7 +53,6 @@ const meshFromData = async (
   meshData: { file: string, geometry: string, height?: number },
   svgLoader: SVGLoader,
   loader: TextureLoader,
-  depth: number,
   name: string,
   inheritedHeight: number,
   spacing: number,
@@ -66,7 +67,7 @@ const meshFromData = async (
   ]);
   const shape = svgData.paths[0].toShapes(true);
   const geometry = new ExtrudeGeometry(shape, {
-    depth,
+    depth: 0.001,
     bevelThickness: 0,
     bevelSize: -0.001,
   });
@@ -92,7 +93,7 @@ const meshFromData = async (
   entityMesh.visible = false;
   entityMesh.castShadow = true;
   entityMesh.receiveShadow = true;
-  entityMesh.scale.set(scale, -scale, -0.01);
+  entityMesh.scale.set(scale, -scale, -1);
   entityMesh.position.set(0, height / 2, spacing * 0.0001);
   return entityMesh;
 };
@@ -101,23 +102,19 @@ const getMeshes = async (
   id: string,
   svgLoader: SVGLoader,
   loader: TextureLoader,
-  depth: number,
 ) => {
   const meshData = MeshData[id];
   const inheritedHeight = meshData.height;
   return Promise.all([
-    meshFromData(meshData, svgLoader, loader, depth, 'default', inheritedHeight, 0),
+    meshFromData(meshData, svgLoader, loader, 'default', inheritedHeight, 0),
     ...Object.entries(meshData.alt || {}).map(([altId, data], index) => meshFromData(
-      data, svgLoader, loader, depth, altId, inheritedHeight, index + 1,
+      data, svgLoader, loader, altId, inheritedHeight, index + 1,
     )),
   ]);
 };
 
 const useLoadEntities = (
   scene: Scene,
-  cameraDefaultPosition: Vector3 | undefined,
-  cubeUnit: number, // possibly moved to location file
-  depth: number, // possibly moved to location file
 ):[Map<string, GameEntity>, boolean, AnimationMixer[]] => {
   const { data } = useQuery(LOCATION_CHECKS);
   const { locationId, checks, commandQueue } = data;
@@ -127,16 +124,26 @@ const useLoadEntities = (
 
   const loadEntities = useCallback(async () => {
     const location = Locations[locationId];
-    const { entities, mapWidth, mapDepth } = location;
+    const {
+      entities, mapWidth, mapHeight, mapDepth,
+    } = location;
     const holder:Map<string, GameEntity> = new Map();
 
-    if (entities && entities.size && cameraDefaultPosition) {
+    const cameraPosition = calcCameraPosition(
+      Locations[locationId],
+      CharacterStats[checks.identity].eyeHeight,
+    );
+
+    if (entities && entities.size) {
       const svgLoader = new SVGLoader();
       const loader = new TextureLoader();
       await Promise.all(Array.from(entities).map(async ([id, entity]) => {
+        const {
+          x, y = 0, z, altId = 'default', activate, visible,
+        } = entity;
         const entityGroup = new Group();
         entityGroup.name = id;
-        const meshes = await getMeshes(entity.meshId, svgLoader, loader, depth);
+        const meshes = await getMeshes(entity.meshId, svgLoader, loader);
         const mixers:Record<string, AnimationMixer> = {};
         meshes.forEach((mesh) => {
           entityGroup.add(mesh);
@@ -149,27 +156,22 @@ const useLoadEntities = (
           });
           mixers[mesh.name] = newMixer;
         });
-        entityGroup.position.set(
-          (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
-          -cubeUnit / 2,
-          (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
-        );
+        const groupX = x - mapWidth / 2;
+        const groupY = y - mapHeight / 2;
+        const groupZ = z - mapDepth / 2;
+        entityGroup.position.set(groupX, groupY, groupZ);
         entityGroup.lookAt(
-          cameraDefaultPosition.x,
-          -cubeUnit / 2,
-          cameraDefaultPosition.z,
+          cameraPosition.x,
+          groupY,
+          cameraPosition.z,
         );
         const gameEntity = {
           group: entityGroup,
-          altId: entity.altId || 'default',
+          altId,
           mixers,
-          activate: entity.activate,
-          getVisibility: entity.visible,
-          getPosition: () => new Vector3(
-            (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
-            -cubeUnit / 2,
-            (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
-          ),
+          activate,
+          getVisibility: visible,
+          getPosition: () => new Vector3(groupX, groupY, groupZ),
         };
         const activeMesh = getActiveMesh(gameEntity);
         if (entity.activate) {
@@ -182,22 +184,28 @@ const useLoadEntities = (
         holder.set(id, gameEntity);
       }));
     }
-    setGameEntities(holder);
+
     setLoaded(true);
     return holder;
+  // we want to ignore checks because that's handled below
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraDefaultPosition, cubeUnit, depth, locationId, mixerQueue, scene]);
+  }, [locationId, scene]);
 
   useEffect(() => {
+    setLoaded(false);
     setGameEntities(new Map());
-    if (Locations[locationId] && cameraDefaultPosition) {
+    async function setEntities(entities: Promise<Map<string, GameEntity>>) {
+      setGameEntities(await entities);
+    }
+    if (Locations[locationId]) {
       const entities = loadEntities();
+      setEntities(entities);
       return () => {
         cleanEntities(entities);
       };
     }
     return () => { /* do nothing */ };
-  }, [locationId, cameraDefaultPosition, loadEntities]);
+  }, [locationId, loadEntities]);
 
   // update entities based on checks
   useEffect(() => {
@@ -205,7 +213,7 @@ const useLoadEntities = (
       gameEntities.forEach((gameEntity) => {
         if (gameEntity.getVisibility) {
           const activeMesh = getActiveMesh(gameEntity);
-          if (gameEntity.getVisibility(checks) && !activeMesh.visible) {
+          if (gameEntity.getVisibility(checks) && activeMesh && !activeMesh.visible) {
             activeMesh.layers.enable(1);
             const mixer = getActiveMixer(gameEntity);
             const fadeInAction = mixer.clipAction(fadeIn);
@@ -215,7 +223,7 @@ const useLoadEntities = (
             mixer.stopAllAction();
             fadeInAction.play();
             mixerQueue.current.push(mixer);
-          } else if (!gameEntity.getVisibility(checks) && activeMesh.visible) {
+          } else if (!gameEntity.getVisibility(checks) && activeMesh && activeMesh.visible) {
             activeMesh.layers.disable(1);
             const mixer = getActiveMixer(gameEntity);
             const fadeOutAction = mixer.clipAction(fadeOut);

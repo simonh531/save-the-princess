@@ -1,5 +1,5 @@
 import { Mesh, MeshStandardMaterial } from 'three';
-import { GameEntity, ScaledInstancedMesh } from '../utils/interfaces';
+import { GameEntity, InstancedMeshData } from '../utils/interfaces';
 
 export function cleanup(mesh: Mesh):void {
   if (mesh.parent) {
@@ -21,16 +21,12 @@ export function cleanup(mesh: Mesh):void {
   }
 }
 
-export async function cleanTiles(
-  tiles:Promise<Record<string, Promise<ScaledInstancedMesh>>>,
+export async function cleanTilesArray(
+  tiles:Promise<Map<string, InstancedMeshData>[]>,
 ):Promise<void> {
-  Object.values(await tiles).forEach(async (tile) => cleanup((await tile).mesh));
-}
-
-export async function cleanTileArray(
-  tileArrayPromise: Promise<Promise<Record<string, Promise<ScaledInstancedMesh>>>[]>,
-):Promise<void> {
-  (await tileArrayPromise).forEach((tileset) => cleanTiles(tileset));
+  (await tiles).forEach(async (tile) => tile.forEach(
+    async (meshData) => cleanup((await meshData.meshData).mesh),
+  ));
 }
 
 export async function cleanEntities(

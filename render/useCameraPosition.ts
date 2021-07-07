@@ -7,11 +7,14 @@ import {
   PerspectiveCamera,
   Camera,
 } from 'three';
+import calcCameraPosition from './calcCameraPosition';
 import Locations from '../locations';
+import CharacterStats from '../data/characterStats';
 
-const LOCATION = gql`
-  query GetGameState {
+const LOCATION_CHECKS = gql`
+  query GetLocationChecks {
     locationId,
+    checks,
   }
 `;
 
@@ -22,21 +25,20 @@ const LOCATION = gql`
 const useCameraPosition = (
   camera: PerspectiveCamera,
   dummyCamera: Camera,
-  cubeUnit: number, // possibly moved to location file
 ):Vector3 | undefined => {
-  const { data } = useQuery(LOCATION);
-  const { locationId } = data;
+  const { data } = useQuery(LOCATION_CHECKS);
+  const { locationId, checks } = data;
   const [cameraDefaultPosition, setCameraDefaultPosition] = useState<Vector3 | undefined>();
 
   useEffect(() => {
     const location = Locations[locationId];
     const {
-      mapWidth, cameraX, cameraZ, cameraAngle, cameraHorizontalRange, cameraVerticalRange,
+      cameraAngle, cameraHorizontalRange, cameraVerticalRange,
     } = location;
-    const cameraPosition = new Vector3(
-      (cameraX - (mapWidth / 2) + 0.5) * cubeUnit,
-      0, // 1.5,
-      (cameraZ - (mapWidth / 2) + 0.5) * cubeUnit,
+
+    const cameraPosition = calcCameraPosition(
+      Locations[locationId],
+      CharacterStats[checks.identity].eyeHeight,
     );
 
     dummyCamera.userData = { cameraAngle, cameraHorizontalRange, cameraVerticalRange };
@@ -48,7 +50,7 @@ const useCameraPosition = (
       dummyCamera.rotation.setFromVector3(cameraAngle, 'YXZ');
       camera.rotation.setFromVector3(cameraAngle, 'YXZ');
     }
-  }, [camera, cubeUnit, dummyCamera, locationId]);
+  }, [camera, checks.identity, dummyCamera, locationId]);
 
   return cameraDefaultPosition;
 };

@@ -10,14 +10,12 @@ import AccessibilityNewIcon from '@material-ui/icons/AccessibilityNew';
 import { gql, useQuery } from '@apollo/client';
 import Topics from '../data/topics';
 import Items from '../data/items';
-import * as CharacterStats from '../data/characterStats';
+import CharacterStats from '../data/characterStats';
 import Skills from '../data/skills';
 import { Activatable, StateItem } from '../utils/interfaces';
 import { getText, getAction } from '../utils/getters';
 import { useThemeSounds } from '../utils/hooks';
 // import NotificationDot from './notificationDot';
-
-const characterStats:Record<string, Record<string, number>> = CharacterStats;
 
 const USABLES = gql`
   query GetUsables {
@@ -240,7 +238,7 @@ const MenuDrawer: FC = () => {
       </ListItem>
     ));
   } else if (activeTab === 'skills') {
-    const baseSkills = characterStats[checks.identity];
+    const baseSkills = CharacterStats[checks.identity].skills;
     const calculatedStats = calcStats(baseSkills, checks);
     Object.entries(calculatedStats).forEach(([id, level]) => {
       if (level) {

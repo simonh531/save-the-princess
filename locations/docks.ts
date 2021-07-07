@@ -1,13 +1,13 @@
 import { Location } from '../utils/interfaces';
 
-const test:Location = {
+const docks:Location = {
   background: '/assets/docks/docks.png',
-  groundLight: 0x000080,
-  skyLight: 0x87cefa,
-  mapWidth: 5,
-  mapDepth: 5,
-  cameraX: 2,
-  cameraZ: 4,
+  mapWidth: 15,
+  mapHeight: 3,
+  mapDepth: 15,
+  cameraX: 7.5,
+  cameraY: 0,
+  cameraZ: 13.5,
   cameraHorizontalRange: Math.PI,
   cameraVerticalRange: Math.PI / 4,
   direction: 0,
@@ -15,8 +15,8 @@ const test:Location = {
   entities: new Map([
     ['hyde', {
       meshId: 'hyde',
-      x: 3,
-      z: 3,
+      x: 10.5,
+      z: 10.5,
       activate: {
         focusId: 'hyde',
         dialogueId: 'hyde/changeTime',
@@ -24,8 +24,8 @@ const test:Location = {
     }],
     ['present', {
       meshId: 'present',
-      x: 1.5,
-      z: 3,
+      x: 6,
+      z: 10.5,
       activate: {
         focusId: 'present',
         dialogueId: 'present/ackbar',
@@ -34,4 +34,4 @@ const test:Location = {
   ]),
 };
 
-export default test;
+export default docks;

@@ -1,52 +1,57 @@
+import { setLocation } from '../data/state';
 import { Checks, Location } from '../utils/interfaces';
 
 const test:Location = {
   background: '/assets/test/testfield.png',
-  groundLight: '/assets/test/testground.jpg',
-  skyLight: '/assets/test/testceiling.jpg',
-  mapWidth: 5,
-  mapDepth: 5,
-  cameraX: 2,
-  cameraZ: 4,
+  mapWidth: 15,
+  mapHeight: 3,
+  mapDepth: 15,
+  cameraX: 7.5,
+  cameraY: 0,
+  cameraZ: 13.5,
   cameraHorizontalRange: Math.PI / 2,
   cameraVerticalRange: Math.PI / 4,
   direction: 0,
-  walls: {
+  walls: [{
     plan: '/assets/test/testwallplan.png',
-    tiles: {
-      255: {
-        url: '/assets/test/testwall.png',
+    tiles: new Map([[
+      '128', {
+        map: '/assets/test/testwall.png',
         colors: [0xffffff],
         geometry: '/assets/test/testwall.svg',
       },
-    },
-  },
+    ]]),
+    unit: 3,
+  }],
   horizontalPlanes: [
     {
       plan: '/assets/test/testfloorplan.png',
-      tiles: {
-        ffffff: {
-          url: '/assets/test/testground.jpg',
+      tiles: new Map([[
+        'ffffff', {
+          map: '/assets/test/testground.jpg',
           repeat: 2,
           clearcoat: 1,
         },
-      },
+      ]]),
+      unit: 3,
+      clipBelow: true,
     },
     {
       plan: '/assets/test/testceilingplan.png',
-      tiles: {
-        ffffff: {
-          url: '/assets/test/testceiling.jpg',
+      tiles: new Map([[
+        'ffffff', {
+          map: '/assets/test/testceiling.jpg',
           repeat: 3,
         },
-      },
+      ]]),
+      unit: 3,
     },
   ],
   entities: new Map([
     ['testprincess1', {
       meshId: 'testprincess',
-      x: 1,
-      z: 3.5,
+      x: 4.5,
+      z: 12,
       activate: {
         focusId: 'testprincess1',
         dialogueId: 'testprincess/tutorial',
@@ -54,8 +59,8 @@ const test:Location = {
     }],
     ['testprincess2', {
       meshId: 'testprincess',
-      x: 1.9,
-      z: 1.5,
+      x: 7.2,
+      z: 6,
       activate: {
         focusId: 'testprincess2',
         dialogueId: 'testprincess/birthdayPout',
@@ -63,8 +68,8 @@ const test:Location = {
     }],
     ['takero', {
       meshId: 'takero',
-      x: 3,
-      z: 3.5,
+      x: 10.5,
+      z: 12,
       activate: {
         focusId: 'takero',
         dialogueId: 'takero/changeTime',
@@ -72,17 +77,14 @@ const test:Location = {
     }],
     ['hyde', {
       meshId: 'hyde',
-      x: 2.4,
-      z: 3,
-      activate: {
-        focusId: 'hyde',
-        dialogueId: 'hyde/intro',
-      },
+      x: 8.7,
+      z: 10.5,
+      activate: () => setLocation('carriage'),
     }],
     ['present', {
       meshId: 'present',
-      x: 1.5,
-      z: 3,
+      x: 6,
+      z: 10.5,
       activate: {
         focusId: 'present',
         dialogueId: 'present/pickup',

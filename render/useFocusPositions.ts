@@ -10,9 +10,7 @@ const LOCATION = gql`
   }
 `;
 
-const useFocusPositions = (
-  cubeUnit: number, // possibly moved to location file
-):Record<string, Vector3> | undefined => {
+const useFocusPositions = ():Record<string, Vector3> | undefined => {
   const { data } = useQuery(LOCATION);
   const { locationId } = data;
   const [
@@ -21,26 +19,29 @@ const useFocusPositions = (
 
   const location = Locations[locationId];
   const {
-    entities, focusPositions, mapWidth, mapDepth,
+    entities, focusPositions, mapWidth, mapHeight, mapDepth,
   } = location;
 
   useEffect(() => {
     const holder = { ...focusPositions };
     if (entities && entities.size) {
       entities.forEach((entity, id) => {
-        const entityData = MeshData[entity.meshId];
+        const {
+          x, y = 0, z, meshId,
+        } = entity;
+        const { height, cameraAdjustment } = MeshData[meshId];
         holder[id] = new Vector3(
-          (entity.x - (mapWidth / 2) + 0.5) * cubeUnit,
-          (entityData.height - cubeUnit) / 2,
-          (entity.z - (mapDepth / 2) + 0.5) * cubeUnit,
+          x - mapWidth / 2,
+          (y + height - mapHeight) / 2,
+          z - mapDepth / 2,
         );
-        if (entityData.cameraAdjustment) {
-          holder[id].add(entityData.cameraAdjustment);
+        if (cameraAdjustment) {
+          holder[id].add(cameraAdjustment);
         }
       });
     }
     setFocusPositionsReturn(holder);
-  }, [cubeUnit, entities, focusPositions, locationId, mapDepth, mapWidth]);
+  }, [entities, focusPositions, locationId, mapDepth, mapHeight, mapWidth]);
 
   return focusPositionsReturn;
 };

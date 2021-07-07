@@ -1,5 +1,5 @@
 import {
-  MutableRefObject, useEffect, useRef, useState,
+  MutableRefObject, useCallback, useEffect, useRef, useState,
 } from 'react';
 import { gql, useQuery } from '@apollo/client';
 import {
@@ -7,7 +7,7 @@ import {
   Camera, Color, DirectionalLight, Euler,
   PerspectiveCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer, AnimationMixer,
 } from 'three';
-import { GameEntity } from '../utils/interfaces';
+import { Activatable, GameEntity } from '../utils/interfaces';
 import { getAction } from '../utils/getters';
 
 const FOCUS = gql`
@@ -15,6 +15,8 @@ const FOCUS = gql`
     focusId,
   }
 `;
+
+const doNothing = () => { /* do nothing */ };
 
 const useAnimationLoop = (
   gameArea: HTMLDivElement | null,
@@ -36,7 +38,8 @@ const useAnimationLoop = (
   const { focusId } = data;
   const mouseX = useRef(0);
   const mouseY = useRef(0);
-  const activate = useRef<(() => void) | MutableRefObject<() => void>>(() => { /* do nothing */ });
+  const [activate, setActivate] = useState<
+    Activatable | MutableRefObject<() => void>>(() => doNothing);
   const [fps, setFps] = useState(0);
   const [cameraStopped, setCameraStopped] = useState(false);
   const cameraStoppedRef = useRef(cameraStopped);
@@ -46,13 +49,21 @@ const useAnimationLoop = (
   const showFpsRef = useRef(showFps);
   const gameEntitiesRef = useRef(gameEntities);
 
-  function click() {
-    if ('current' in activate.current) {
-      activate.current.current();
-    } else {
+  const click = useCallback(() => {
+    if (typeof activate === 'object' && 'current' in activate) {
       activate.current();
+    } else {
+      getAction(activate)();
     }
-  }
+  }, [activate]);
+
+  useEffect(() => {
+    if (renderer) {
+      renderer.domElement.addEventListener('click', click);
+      return () => renderer.domElement.removeEventListener('click', click);
+    }
+    return () => { /* do nothing */ };
+  }, [click, renderer]);
 
   function handleMove(event:MouseEvent) {
     mouseX.current = event.clientX;
@@ -146,17 +157,17 @@ const useAnimationLoop = (
               // eslint-disable-next-line no-param-reassign
               renderer.domElement.style.cursor = 'pointer';
               if (focusIdRef.current) {
-                activate.current = advanceActionRef;
+                setActivate(() => advanceActionRef);
               } else if (intersection.object.parent && gameEntitiesRef.current.size) {
                 const gameEntity = gameEntitiesRef.current.get(intersection.object.parent.name);
                 if (gameEntity && gameEntity.activate) {
-                  activate.current = getAction(gameEntity.activate);
+                  setActivate(() => gameEntity.activate);
                 }
               }
             } else {
               // eslint-disable-next-line no-param-reassign
               renderer.domElement.style.cursor = 'default';
-              activate.current = () => { /* do nothing */ };
+              setActivate(() => doNothing);
             }
           }
         }
@@ -202,29 +213,29 @@ const useAnimationLoop = (
     if (renderer && gameArea) {
       renderer.setAnimationLoop(animate);
       gameArea.addEventListener('mousemove', handleMove);
-      renderer.domElement.addEventListener('click', click);
       return () => {
         renderer.setAnimationLoop(null);
         gameArea.removeEventListener('mousemove', handleMove);
-        renderer.domElement.removeEventListener('click', click);
       };
     }
     return () => { /* do nothing */ };
   }, [
-    renderer, camera, dummyCamera, directionalLight, directionalLightTarget,
-    gameArea, ambientLight.color, scene, mixerQueue,
+    ambientLight.color, camera, directionalLight, directionalLightTarget,
+    dummyCamera, gameArea, mixerQueue, renderer, scene,
   ]);
 
   useEffect(() => { // handle camera movement on focus change
     if (cameraDefaultPosition && focusPositions && cameraStopped) {
       if (focusId && focusPositions[focusId]) {
         // math
-        const destination = cameraDefaultPosition.clone()
-          .sub(focusPositions[focusId])
-          .normalize()
-          .multiplyScalar(2)
-          .add(focusPositions[focusId]);
-        dummyCamera.position.copy(destination);
+        // calculating distance squared is more efficient
+        if (cameraDefaultPosition.distanceToSquared(focusPositions[focusId]) > 4) {
+          const destination = cameraDefaultPosition.clone()
+            .sub(focusPositions[focusId])
+            .normalize().multiplyScalar(2)
+            .add(focusPositions[focusId]);
+          dummyCamera.position.copy(destination);
+        }
         dummyCamera.lookAt(focusPositions[focusId]);
       } else {
         dummyCamera.position.copy(cameraDefaultPosition);

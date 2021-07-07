@@ -51,7 +51,9 @@ export interface GameEntity {
 }
 
 export interface Tile {
-  url: string
+  map?: string
+  color?: number
+  depth?: number
   colors?: number[]
   geometry?: string
   repeat?: number
@@ -60,24 +62,27 @@ export interface Tile {
 }
 
 export interface Plane {
-  plan: string
-  tiles: Record<string, Tile>
+  plan?: string
+  tiles?: Map<string, Tile>
+  unit?: number
+  aspect?: number // width/height
+  clipBelow?: boolean
 }
 
 export interface Location {
   background: string
-  groundLight: string | number
-  skyLight: string | number
   mapWidth: number
+  mapHeight: number
   mapDepth: number
   cameraX: number
+  cameraY: number // this position is for the ground
   cameraZ: number
   cameraAngle?: Vector3
   cameraHorizontalRange?: number
   cameraVerticalRange?: number
-  direction: number
-  walls?: Plane
-  horizontalPlanes: Plane[]
+  direction?: number
+  walls?: Plane[]
+  horizontalPlanes?: Plane[]
   focusPositions?: Record<string, Vector3>
   entities?: Map<string, LocationEntity>
 }
@@ -146,11 +151,6 @@ export interface LookupTable {
   indices?: number[],
 }
 
-export interface ScaledInstancedMesh {
-  mesh: InstancedMesh,
-  scale?: number
-}
-
 export interface Command {
   command: string,
   id: string,
@@ -159,4 +159,14 @@ export interface Command {
 export interface ChangeMeshCommand extends Command {
   command: 'changeMesh'
   mesh: string
+}
+
+export interface CharacterStats {
+  eyeHeight: number
+  skills: Record<string, number>
+}
+
+export interface InstancedMeshData {
+  meshData: Promise<{ mesh: InstancedMesh, scale?: number }>,
+  depth: number,
 }
