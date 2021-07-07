@@ -31,7 +31,7 @@
     "@types/pngjs": "^6.0.0",
     "@types/react": "^17.0.9",
     "@types/styled-components": "^5.1.9",
-    "@types/three": "^0.129.0",
+    "@types/three": "^0.130.0",
     "@typescript-eslint/eslint-plugin": "^4.24.0",
     "@typescript-eslint/parser": "^4.24.0",
     "babel-plugin-styled-components": "^1.12.0",

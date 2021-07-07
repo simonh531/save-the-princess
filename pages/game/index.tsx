@@ -1,5 +1,5 @@
 import {
-  FC, useState, useEffect, useRef, useMemo,
+  FC, useState, useEffect, useRef,
 } from 'react';
 import styled from 'styled-components';
 import {
@@ -13,13 +13,7 @@ import {
   Color,
   sRGBEncoding,
 } from 'three';
-import path from 'path';
-import fs from 'fs';
-import zlib from 'zlib';
-import JSONB from 'json-buffer';
-import { PNG } from 'pngjs';
 import { useWindowSizeEffect } from '../../utils/hooks';
-import locationList from '../../locations';
 
 import GameGrid from '../../components/gameGrid';
 import DialogueBox from '../../components/dialogueBox';
@@ -35,8 +29,6 @@ import useBackgroundShading from '../../render/useBackgroundShading';
 import useEnvMap from '../../render/useEnvMap';
 import useFocusPositions from '../../render/useFocusPositions';
 import useCameraPosition from '../../render/useCameraPosition';
-import colorLookup, { makeLookupTable } from '../../utils/colorLookup';
-import { CompressedFilteredBackground, FilteredBackground } from '../../utils/interfaces';
 
 const GameArea = styled.main`
   height: 100vh;
@@ -54,37 +46,9 @@ const FPS = styled.span`
 // units are meters let's say
 const cubeUnit = 3;
 
-const Game: FC<{
-  compressedFilteredBackgrounds:Record<string, CompressedFilteredBackground>
-}> = ({ compressedFilteredBackgrounds }) => {
+const Game:FC = () => {
   const [advanceAction, setAdvanceAction] = useState(() => () => { /* do nothing */ });
   const [showFps, setShowFps] = useState(false);
-
-  const filteredBackgrounds = useMemo(
-    () => {
-      const holder:Record<string, FilteredBackground> = {};
-      Object.entries(compressedFilteredBackgrounds).forEach(([id, compressedData]) => {
-        const {
-          original: compressedOriginal,
-          sunset: compressedSunset,
-          night: compressedNight,
-          width, height,
-        } = compressedData;
-        const original = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedOriginal)));
-        const sunset = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedSunset)));
-        const night = new Uint8ClampedArray(zlib.inflateSync(JSONB.parse(compressedNight)));
-        holder[id] = {
-          original,
-          sunset,
-          night,
-          width,
-          height,
-        };
-      });
-      return holder;
-    },
-    [compressedFilteredBackgrounds],
-  );
 
   // initializable -- no need to update
   const scene = useRef(new Scene());
@@ -134,7 +98,7 @@ const Game: FC<{
     directionalLightTarget.current,
     cubeUnit,
   );
-  const backgroundShaded = useBackgroundShading(renderer, scene.current, filteredBackgrounds);
+  const backgroundShaded = useBackgroundShading(renderer, scene.current);
 
   useWindowSizeEffect((width, height) => { // set canvas width and height
     camera.current.aspect = width / height;
@@ -219,53 +183,3 @@ const Game: FC<{
 };
 
 export default Game;
-
-const asyncDeflate = async (buffer:Buffer) => new Promise<Buffer>((resolve, reject) => {
-  zlib.deflate(buffer, (error, data) => {
-    if (error) {
-      reject(error);
-    } else {
-      resolve(data);
-    }
-  });
-});
-
-export async function getStaticProps(): Promise<{
-  props: {
-    compressedFilteredBackgrounds: Record<string, CompressedFilteredBackground>;
-  };
-}> {
-  const [nightfromday, LateSunset] = await Promise.all([
-    makeLookupTable('/nightfromday.CUBE'),
-    makeLookupTable('/LateSunset.3DL'),
-  ]);
-  const compressedFilteredBackgrounds:Record<string, CompressedFilteredBackground> = {};
-  const values = await Promise.all([...Object.entries(locationList).map(([id, location]) => {
-    const { background } = location;
-    const png = fs.createReadStream(path.join(process.cwd(), 'public', background)).pipe(new PNG());
-    return new Promise<[string, CompressedFilteredBackground]>((resolve) => {
-      png.on('parsed', async () => {
-        const [original, sunset, night] = await Promise.all([
-          asyncDeflate(png.data),
-          asyncDeflate(colorLookup(LateSunset, png.data)),
-          asyncDeflate(colorLookup(nightfromday, png.data)),
-        ]);
-        resolve([id, {
-          original: JSONB.stringify(original),
-          sunset: JSONB.stringify(sunset),
-          night: JSONB.stringify(night),
-          width: png.width,
-          height: png.height,
-        }]);
-      });
-    });
-  })]);
-  values.forEach(([id, filteredBackground]) => {
-    compressedFilteredBackgrounds[id] = filteredBackground;
-  });
-  return {
-    props: {
-      compressedFilteredBackgrounds,
-    },
-  };
-}
