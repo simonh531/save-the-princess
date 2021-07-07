@@ -1,5 +1,3 @@
-import { readFile } from 'fs/promises';
-import path from 'path';
 import { LookupTable } from './interfaces';
 
 const getDecimal = (number: number) => {
@@ -26,11 +24,6 @@ const getIndexFromIndices = (indices:number[], value:number): number => {
   return wholeIndex + decimal;
 };
 
-const colorToNumberArray = (value: string, multiplier: number) => {
-  const values = value.split(' ');
-  return values.map((valueString) => parseFloat(valueString) * multiplier);
-};
-
 const colorsToDelta = (color1:number[], color2:number[], decimal: number) => [
   (color2[0] - color1[0]) * decimal,
   (color2[1] - color1[1]) * decimal,
@@ -48,23 +41,25 @@ const tetrahedralInterpolation = (
 ) => {
   const max = lookupArray.length - 1;
 
-  const black = lookupArray[Math.floor(r)][Math.floor(g)][Math.floor(b)];
-  const red = lookupArray[Math.min(Math.floor(r) + 1, max)][Math.floor(g)][Math.floor(b)];
-  const green = lookupArray[Math.floor(r)][Math.min(Math.floor(g) + 1, max)][Math.floor(b)];
-  const blue = lookupArray[Math.floor(r)][Math.floor(g)][Math.min(Math.floor(b) + 1, max)];
-  const cyan = lookupArray[
-    Math.floor(r)][Math.min(Math.floor(g) + 1, max)][Math.min(Math.floor(b) + 1, max)];
-  const magenta = lookupArray[
-    Math.min(Math.floor(r) + 1, max)][Math.floor(g)][Math.min(Math.floor(b) + 1, max)];
-  const yellow = lookupArray[
-    Math.min(Math.floor(r) + 1, max)][Math.min(Math.floor(g) + 1, max)][Math.floor(b)];
-  const white = lookupArray[
-    Math.min(Math.floor(r) + 1, max)][
-    Math.min(Math.floor(g) + 1, max)][
-    Math.min(Math.floor(b) + 1, max)];
+  const floorR = Math.floor(r);
+  const floorG = Math.floor(g);
+  const floorB = Math.floor(b);
+  const upR = Math.min(floorR + 1, max);
+  const upG = Math.min(floorG + 1, max);
+  const upB = Math.min(floorB + 1, max);
+  const black = lookupArray[floorR][floorG][floorB];
+  // const red = lookupArray[upR][floorG][floorB];
+  // const green = lookupArray[floorR][upG][floorB];
+  // const blue = lookupArray[floorR][floorG][upB];
+  // const cyan = lookupArray[floorR][upG][upB];
+  // const magenta = lookupArray[upR][floorG][upB];
+  // const yellow = lookupArray[upR][upG][floorB];
+  const white = lookupArray[upR][upG][upB];
 
   if (r > g) {
     if (g > b) { // r > g > b
+      const red = lookupArray[upR][floorG][floorB];
+      const yellow = lookupArray[upR][upG][floorB];
       return addColors(
         black,
         colorsToDelta(black, red, getDecimal(r)),
@@ -73,6 +68,8 @@ const tetrahedralInterpolation = (
       );
     }
     if (b > g) { // r > b > g
+      const red = lookupArray[upR][floorG][floorB];
+      const magenta = lookupArray[upR][floorG][upB];
       return addColors(
         black,
         colorsToDelta(black, red, getDecimal(r)),
@@ -80,6 +77,8 @@ const tetrahedralInterpolation = (
         colorsToDelta(red, magenta, getDecimal(b)),
       );
     } // b > r > g and b = r > g
+    const blue = lookupArray[floorR][floorG][upB];
+    const magenta = lookupArray[upR][floorG][upB];
     return addColors(
       black,
       colorsToDelta(blue, magenta, getDecimal(r)),
@@ -88,6 +87,8 @@ const tetrahedralInterpolation = (
     );
   }
   if (b > g) { // b > g > r and b > g = r
+    const blue = lookupArray[floorR][floorG][upB];
+    const cyan = lookupArray[floorR][upG][upB];
     return addColors(
       black,
       colorsToDelta(cyan, white, getDecimal(r)),
@@ -96,6 +97,8 @@ const tetrahedralInterpolation = (
     );
   }
   if (b > r) { // g > b > r and g = b > r
+    const green = lookupArray[floorR][upG][floorB];
+    const cyan = lookupArray[floorR][upG][upB];
     return addColors(
       black,
       colorsToDelta(cyan, white, getDecimal(r)),
@@ -103,6 +106,8 @@ const tetrahedralInterpolation = (
       colorsToDelta(green, cyan, getDecimal(b)),
     );
   } // g > r > b and r = g = b
+  const green = lookupArray[floorR][upG][floorB];
+  const yellow = lookupArray[upR][upG][floorB];
   return addColors(
     black,
     colorsToDelta(green, yellow, getDecimal(r)),
@@ -111,61 +116,11 @@ const tetrahedralInterpolation = (
   );
 };
 
-export const makeLookupTable = async (url: string):Promise<LookupTable> => {
-  const extension = url.split('.').pop() || 'error';
-  const text = await readFile(path.join(process.cwd(), 'public', 'assets', url), 'utf-8');
-
-  const textLines = text.split('\n');
-  let dimension = 17; // default
-  let padding = 0;
-  let multiplier = 1;
-  let indices;
-  if (extension === 'CUBE') {
-    dimension = parseInt(
-      textLines[5].split(' ')[1], 10,
-    );
-    padding = 12;
-    multiplier = 255;
-  } else if (extension === '3DL') {
-    indices = textLines[2].split(' ').map((number) => parseInt(number, 10));
-    dimension = indices.length;
-    padding = 3;
-    multiplier = 1;
-  }
-  const lookupTable = new Array(dimension);
-  // the reason I decide to parse it here is because parsing 17^3
-  // times is better than parsing 4 * 1000 * 500 times for an image
-  for (let i = 0; i < dimension; i += 1) {
-    const newArray = new Array(dimension);
-    newArray[0] = new Array(dimension);
-    newArray[0][0] = colorToNumberArray(textLines[i + padding], multiplier);
-    lookupTable[i] = newArray;
-  }
-  for (let i = dimension; i < dimension * dimension; i += 1) {
-    const newArray = new Array(dimension);
-    newArray[0] = colorToNumberArray(textLines[i + padding], multiplier);
-    lookupTable[i % dimension][Math.floor(i / dimension)] = newArray;
-  }
-  for (let i = dimension * dimension; i + padding < textLines.length; i += 1) {
-    lookupTable[
-      i % dimension][
-      Math.floor(i / dimension) % dimension][
-      Math.floor(i / dimension / dimension)] = colorToNumberArray(
-      textLines[i + padding], multiplier,
-    );
-  }
-  return {
-    array: lookupTable,
-    type: extension,
-    indices,
-  };
-};
-
 export default function colorLookup(
-  lookupTable: LookupTable, data: Buffer,
-):Buffer {
+  lookupTable: LookupTable, data: Uint8ClampedArray,
+):Uint8ClampedArray {
   const dimension = lookupTable.array.length;
-  const holder = new Uint8ClampedArray(data.length);
+  const newData = new Uint8ClampedArray(data.length);
   if (lookupTable.type === 'CUBE') {
     for (let i = 0; i < data.length; i += 4) {
       const rIndex = data[i] / dimension;
@@ -176,10 +131,10 @@ export default function colorLookup(
         lookupTable.array, rIndex, gIndex, bIndex,
       );
 
-      holder[i] = Math.round(newR);
-      holder[i + 1] = Math.round(newG);
-      holder[i + 2] = Math.round(newB);
-      holder[i + 3] = 255;
+      newData[i] = Math.round(newR);
+      newData[i + 1] = Math.round(newG);
+      newData[i + 2] = Math.round(newB);
+      newData[i + 3] = 255;
     }
   } else if (lookupTable.type === '3DL' && lookupTable.indices) {
     for (let i = 0; i < data.length; i += 4) {
@@ -191,12 +146,11 @@ export default function colorLookup(
         lookupTable.array, rIndex, gIndex, bIndex,
       ); // range 4095 to 255
 
-      holder[i] = Math.round((newR + 1) / 16 - 1);
-      holder[i + 1] = Math.round((newG + 1) / 16 - 1);
-      holder[i + 2] = Math.round((newB + 1) / 16 - 1);
-      holder[i + 3] = 255;
+      newData[i] = Math.round((newR + 1) / 16 - 1);
+      newData[i + 1] = Math.round((newG + 1) / 16 - 1);
+      newData[i + 2] = Math.round((newB + 1) / 16 - 1);
+      newData[i + 3] = 255;
     }
   }
-  const newData = Buffer.from(holder);
   return newData;
 }

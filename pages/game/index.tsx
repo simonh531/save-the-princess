@@ -29,6 +29,8 @@ import useBackgroundShading from '../../render/useBackgroundShading';
 import useEnvMap from '../../render/useEnvMap';
 import useFocusPositions from '../../render/useFocusPositions';
 import useCameraPosition from '../../render/useCameraPosition';
+import makeLookupTable from '../../utils/makeLookupTable';
+import { LookupTable } from '../../utils/interfaces';
 
 const GameArea = styled.main`
   height: 100vh;
@@ -46,7 +48,7 @@ const FPS = styled.span`
 // units are meters let's say
 const cubeUnit = 3;
 
-const Game:FC = () => {
+const Game:FC<{lookupTables:Record<string, LookupTable>}> = ({ lookupTables }) => {
   const [advanceAction, setAdvanceAction] = useState(() => () => { /* do nothing */ });
   const [showFps, setShowFps] = useState(false);
 
@@ -98,7 +100,7 @@ const Game:FC = () => {
     directionalLightTarget.current,
     cubeUnit,
   );
-  const backgroundShaded = useBackgroundShading(renderer, scene.current);
+  const backgroundShaded = useBackgroundShading(renderer, scene.current, lookupTables);
 
   useWindowSizeEffect((width, height) => { // set canvas width and height
     camera.current.aspect = width / height;
@@ -183,3 +185,22 @@ const Game:FC = () => {
 };
 
 export default Game;
+
+export async function getStaticProps(): Promise<{
+  props: {
+    lookupTables: Record<string, LookupTable>;
+  };
+}> {
+  const [nightfromday, LateSunset] = await Promise.all([
+    makeLookupTable('/nightfromday.CUBE'),
+    makeLookupTable('/LateSunset.3DL'),
+  ]);
+  return {
+    props: {
+      lookupTables: {
+        nightfromday,
+        LateSunset,
+      },
+    },
+  };
+}
