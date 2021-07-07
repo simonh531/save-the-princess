@@ -28,6 +28,7 @@ const getBackgrounds = async (
     const png = fs.createReadStream(path.join(process.cwd(), 'public', urlString)).pipe(new PNG());
     if (png) {
       png.on('parsed', async () => {
+        console.log('calculating...');
         if (typeString === 'original') {
           const result = PNG.sync.write(png);
           res.status(200)
@@ -60,7 +61,7 @@ const getBackgrounds = async (
             .send(result);
           backgrounds[urlString] = {
             ...backgrounds[urlString],
-            sunset: result,
+            night: result,
           };
         } else {
           res.status(404).send('404');
